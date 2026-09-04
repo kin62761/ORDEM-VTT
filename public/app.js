@@ -9,6 +9,9 @@ let cenas = [];
 let cenaAtualId = '';
 let mapa = { url:'', largura:1600, altura:900 };
 let tokens = [];
+let mascaras = [];
+let modoMascara = '';
+let desenhoMascara = null;
 let zoom = 1;
 let audioDesbloqueado = false;
 let audioState = { url:'', playing:false, offset:0, startedAt:0, volume:.55, loop:true, cenaId:'' };
@@ -99,14 +102,14 @@ $('btnEntrar').onclick=()=>{
 
 socket.on('estadoInicial',estado=>{
   fichas=estado.fichas||{}; cenas=estado.cenas||[]; cenaAtualId=estado.cenaAtualId||'';
-  mapa=estado.mapa||mapa; tokens=estado.tokens||[]; audioState=estado.audioState||audioState;
+  mapa=estado.mapa||mapa; tokens=estado.tokens||[]; mascaras=estado.mascaras||[]; audioState=estado.audioState||audioState;
   $('loginBox').classList.add('hidden'); $('statusOnline').classList.remove('hidden'); $('app').classList.remove('hidden'); $('mainNav')?.classList.remove('hidden');
   const mestre=sessao.perfil==='mestre';
   $('seletorFichaMestre').classList.toggle('hidden',!mestre); $('masterMapControls').classList.toggle('hidden',!mestre); $('masterSceneControls')?.classList.toggle('hidden',!mestre); $('btnNovoFichaVisual')?.classList.toggle('hidden',!mestre);
   $('cinematicCloseMaster')?.classList.toggle('hidden',!mestre);
   if(mestre){ atualizarSelectMestre(); fichaAtualNome=Object.keys(fichas)[0]||''; if(fichaAtualNome) carregarFicha(fichaAtualNome); }
   else { fichaAtualNome=sessao.nome; carregarFicha(fichaAtualNome); }
-  atualizarCenasUI(); aplicarMapa(); renderTokens(); atualizarJogadores(estado.jogadores||[]); aplicarTrilhaCenaNosControles();
+  atualizarCenasUI(); aplicarMapa(); renderMascaras(); renderTokens(); atualizarJogadores(estado.jogadores||[]); aplicarTrilhaCenaNosControles();
   if(estado.cinematica) mostrarCinematica(estado.cinematica);
   if(audioState?.playing) aplicarAudioComando({acao:'play',...audioState,serverNow:estado.serverNow||Date.now()});
 });
@@ -116,11 +119,12 @@ socket.on('fichaAtualizada',({nome,ficha:nova})=>{
   if(sessao.perfil==='mestre') atualizarSelectMestre();
 });
 socket.on('cenaAtualizada',estado=>{
-  cenas=estado.cenas||cenas; cenaAtualId=estado.cenaAtualId||cenaAtualId; mapa=estado.mapa||mapa; tokens=estado.tokens||[];
-  atualizarCenasUI(); aplicarMapa(); renderTokens(); aplicarTrilhaCenaNosControles(estado.trilha);
+  cenas=estado.cenas||cenas; cenaAtualId=estado.cenaAtualId||cenaAtualId; mapa=estado.mapa||mapa; tokens=estado.tokens||[]; mascaras=estado.mascaras||[];
+  atualizarCenasUI(); aplicarMapa(); renderMascaras(); renderTokens(); aplicarTrilhaCenaNosControles(estado.trilha);
 });
-socket.on('mapaAtualizado',m=>{ mapa=m; aplicarMapa(); });
+socket.on('mapaAtualizado',m=>{ mapa=m; aplicarMapa(); renderMascaras(); renderTokens(); });
 socket.on('tokensAtualizados',t=>{ tokens=t||[]; renderTokens(); });
+socket.on('mascarasAtualizadas',m=>{ mascaras=m||[]; renderMascaras(); renderTokens(); });
 socket.on('audioComando',aplicarAudioComando);
 socket.on('cinematicaIniciada',mostrarCinematica);
 socket.on('cinematicaEncerrada',esconderCinematica);
@@ -257,20 +261,147 @@ $('btnRenomearCena')?.addEventListener('click',()=>{ const nome=$('renomearCenaN
 $('btnRemoverCena')?.addEventListener('click',()=>{ if(cenas.length<=1)return toast('É preciso manter pelo menos uma cena.','error'); if(confirm('Excluir esta cena e os tokens dela?'))socket.emit('removerCena',{id:cenaAtualId}); });
 
 $('btnSalvarMapa').onclick=()=>{ const original=$('mapUrl').value.trim(); const url=converterLinkImagem(original); $('mapUrl').value=url; socket.emit('salvarMapa',{url,largura:n($('mapW').value,1600),altura:n($('mapH').value,900)}); toast(original!==url?'Mapa salvo. Link do Google Drive convertido automaticamente.':'Mapa salvo nesta cena.'); };
-$('btnCriarToken').onclick=()=>{ const original=$('tokenImagem').value.trim(); const imagem=converterLinkImagem(original); $('tokenImagem').value=imagem; socket.emit('criarToken',{nome:$('tokenNome').value,dono:$('tokenDono').value,imagem,tamanho:n($('tokenTamanho').value,72)}); toast(original && original!==imagem?'Token criado. Link do Google Drive convertido automaticamente.':'Token criado nesta cena.'); };
+$('btnCriarToken').onclick=()=>{ const original=$('tokenImagem').value.trim(); const imagem=converterLinkImagem(original); $('tokenImagem').value=imagem; const oculto=!!$('tokenOculto')?.checked; socket.emit('criarToken',{nome:$('tokenNome').value,dono:$('tokenDono').value,imagem,tamanho:n($('tokenTamanho').value,72),oculto}); toast(oculto?'Token criado oculto para os jogadores.':(original && original!==imagem?'Token criado. Link do Google Drive convertido automaticamente.':'Token criado nesta cena.')); };
 $('zoomMais').onclick=()=>{zoom=Math.min(2.5,zoom+.1);aplicarZoom();}; $('zoomMenos').onclick=()=>{zoom=Math.max(.35,zoom-.1);aplicarZoom();}; $('zoomReset').onclick=()=>{zoom=1;aplicarZoom();};
 function aplicarMapa(){ const s=$('mapStage'); s.style.width=`${mapa.largura}px`; s.style.height=`${mapa.altura}px`; const mapImg=converterLinkImagem(mapa.url); s.style.backgroundImage=mapImg?`url("${mapImg.replace(/"/g,'%22')}")`:'none'; $('mapUrl').value=mapa.url||''; $('mapW').value=mapa.largura||1600; $('mapH').value=mapa.altura||900; aplicarZoom(); }
 function aplicarZoom(){ $('mapStage').style.transform=`scale(${zoom})`; $('zoomReset').textContent=`${Math.round(zoom*100)}%`; }
+function normalizarNomeToken(v){
+  return String(v||'').trim().toLocaleLowerCase('pt-BR');
+}
+function podeMoverToken(t){
+  if(sessao.perfil==='mestre') return true;
+  return !!t?.dono && normalizarNomeToken(t.dono)===normalizarNomeToken(sessao.nome);
+}
 function renderTokens(){
-  const s=$('mapStage'); s.querySelectorAll('.token').forEach(e=>e.remove());
-  tokens.forEach(t=>{ const el=document.createElement('div'); el.className='token'+(t.dono===sessao.nome?' mine':''); el.style.left=t.x+'px'; el.style.top=t.y+'px'; el.style.width=t.tamanho+'px'; el.style.height=t.tamanho+'px'; el.dataset.id=t.id; const tokenImg=converterLinkImagem(t.imagem); el.innerHTML=tokenImg?`<img src="${esc(tokenImg)}" alt="${esc(t.nome)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span style="display:none">${esc(t.nome)}</span>`:`<span>${esc(t.nome)}</span>`; s.appendChild(el); ativarDrag(el,t); });
+  const s=$('mapStage');
+  s.querySelectorAll('.token').forEach(e=>e.remove());
+  tokens.forEach(t=>{
+    if(sessao.perfil!=='mestre' && t.oculto) return;
+    const el=document.createElement('div');
+    const permitido=podeMoverToken(t);
+    el.className='token'+(normalizarNomeToken(t.dono)===normalizarNomeToken(sessao.nome)?' mine':'')+(permitido?' movable':' locked')+(t.oculto&&sessao.perfil==='mestre'?' token-hidden-master':'');
+    el.style.left=n(t.x)+'px'; el.style.top=n(t.y)+'px';
+    el.style.width=n(t.tamanho,72)+'px'; el.style.height=n(t.tamanho,72)+'px';
+    el.dataset.id=t.id; el.dataset.movable=permitido?'1':'0';
+    el.title=t.oculto&&sessao.perfil==='mestre'?`${t.nome} — OCULTO DOS JOGADORES`:(permitido?`${t.nome} — arraste para mover`:`${t.nome}${t.dono?' — pertence a '+t.dono:' — sem dono'}`);
+    const tokenImg=converterLinkImagem(t.imagem);
+    const conteudo=tokenImg?`<img draggable="false" src="${esc(tokenImg)}" alt="${esc(t.nome)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span style="display:none">${esc(t.nome)}</span>`:`<span>${esc(t.nome)}</span>`;
+    el.innerHTML=conteudo+(sessao.perfil==='mestre'?`<button class="token-eye" type="button" title="${t.oculto?'Mostrar aos jogadores':'Ocultar dos jogadores'}">${t.oculto?'🙈':'👁'}</button>`:'');
+    s.appendChild(el);
+    if(sessao.perfil==='mestre'){
+      const eye=el.querySelector('.token-eye');
+      eye?.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();});
+      eye?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();socket.emit('alterarVisibilidadeToken',{id:t.id,oculto:!t.oculto});toast(!t.oculto?`${t.nome} ficou oculto para os jogadores.`:`${t.nome} ficou visível para os jogadores.`);});
+    }
+    ativarDrag(el,t);
+  });
 }
 function ativarDrag(el,t){
-  let start=null; el.onpointerdown=e=>{ const permitido=sessao.perfil==='mestre'||t.dono===sessao.nome; if(!permitido)return; el.setPointerCapture(e.pointerId); start={mx:e.clientX,my:e.clientY,x:t.x,y:t.y}; };
-  el.onpointermove=e=>{ if(!start)return; const nx=start.x+(e.clientX-start.mx)/zoom, ny=start.y+(e.clientY-start.my)/zoom; el.style.left=nx+'px'; el.style.top=ny+'px'; };
-  el.onpointerup=e=>{ if(!start)return; const nx=start.x+(e.clientX-start.mx)/zoom, ny=start.y+(e.clientY-start.my)/zoom; socket.emit('moverToken',{id:t.id,x:nx,y:ny}); start=null; };
+  let drag=null;
+  const mover=e=>{
+    if(!drag || e.pointerId!==drag.pointerId)return;
+    e.preventDefault();
+    const nx=drag.x+(e.clientX-drag.mx)/zoom;
+    const ny=drag.y+(e.clientY-drag.my)/zoom;
+    drag.nx=nx; drag.ny=ny;
+    el.style.left=nx+'px'; el.style.top=ny+'px';
+  };
+  const finalizar=e=>{
+    if(!drag || (e.pointerId!=null && e.pointerId!==drag.pointerId))return;
+    const nx=Number.isFinite(drag.nx)?drag.nx:drag.x;
+    const ny=Number.isFinite(drag.ny)?drag.ny:drag.y;
+    socket.emit('moverToken',{id:t.id,x:nx,y:ny});
+    try{ if(el.hasPointerCapture?.(drag.pointerId)) el.releasePointerCapture(drag.pointerId); }catch(_){ }
+    drag=null;
+    document.removeEventListener('pointermove',mover,true);
+    document.removeEventListener('pointerup',finalizar,true);
+    document.removeEventListener('pointercancel',finalizar,true);
+  };
+  el.addEventListener('dragstart',e=>e.preventDefault());
+  el.addEventListener('pointerdown',e=>{
+    if(!podeMoverToken(t)){
+      toast(t.dono?`Este token pertence a ${t.dono}.`:'Este token não tem dono.','error');
+      return;
+    }
+    if(e.button!==undefined && e.button!==0)return;
+    e.preventDefault(); e.stopPropagation();
+    const atual=tokens.find(x=>x.id===t.id)||t;
+    drag={pointerId:e.pointerId,mx:e.clientX,my:e.clientY,x:n(atual.x),y:n(atual.y),nx:n(atual.x),ny:n(atual.y)};
+    try{ el.setPointerCapture?.(e.pointerId); }catch(_){ }
+    document.addEventListener('pointermove',mover,true);
+    document.addEventListener('pointerup',finalizar,true);
+    document.addEventListener('pointercancel',finalizar,true);
+  });
   if(sessao.perfil==='mestre') el.ondblclick=()=>{ if(confirm(`Remover ${t.nome}?`))socket.emit('removerToken',t.id); };
 }
+
+// ===== NEBLINA / ESCURIDÃO =====
+function renderMascaras(){
+  const stage=$('mapStage'); if(!stage)return;
+  stage.querySelectorAll('.visibility-mask,.mask-preview').forEach(e=>e.remove());
+  (mascaras||[]).forEach(m=>{
+    const el=document.createElement('div');
+    el.className=`visibility-mask mask-${m.tipo||'fog'} ${sessao.perfil==='mestre'?'master-mask':''}`;
+    el.style.left=n(m.x)+'px'; el.style.top=n(m.y)+'px'; el.style.width=n(m.w)+'px'; el.style.height=n(m.h)+'px';
+    el.style.setProperty('--mask-opacity',Math.max(.1,Math.min(1,n(m.opacidade,m.tipo==='dim'?.5:.94))));
+    el.dataset.id=m.id;
+    if(sessao.perfil==='mestre'){
+      el.title='Dois cliques para remover esta área';
+      el.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();socket.emit('removerMascara',m.id);});
+    }
+    stage.appendChild(el);
+  });
+}
+function ativarModoMascara(tipo){
+  if(sessao.perfil!=='mestre')return;
+  modoMascara=tipo;
+  $('mapStage')?.classList.add('mask-drawing');
+  $('btnFogMode')?.classList.toggle('active-mask-tool',tipo==='fog');
+  $('btnDimMode')?.classList.toggle('active-mask-tool',tipo==='dim');
+  toast(tipo==='fog'?'Arraste no mapa para criar a neblina.':'Arraste no mapa para escurecer uma área.');
+}
+function cancelarModoMascara(){
+  modoMascara=''; desenhoMascara=null;
+  $('mapStage')?.classList.remove('mask-drawing');
+  $('btnFogMode')?.classList.remove('active-mask-tool'); $('btnDimMode')?.classList.remove('active-mask-tool');
+  $('mapStage')?.querySelectorAll('.mask-preview').forEach(e=>e.remove());
+}
+$('btnFogMode')?.addEventListener('click',()=>ativarModoMascara('fog'));
+$('btnDimMode')?.addEventListener('click',()=>ativarModoMascara('dim'));
+$('btnCancelarMask')?.addEventListener('click',cancelarModoMascara);
+$('btnLimparMascaras')?.addEventListener('click',()=>{if(confirm('Remover toda a neblina e escuridão desta cena?'))socket.emit('limparMascaras');});
+
+function coordenadaNoMapa(e){
+  const stage=$('mapStage'); const r=stage.getBoundingClientRect();
+  return {x:Math.max(0,(e.clientX-r.left)/zoom),y:Math.max(0,(e.clientY-r.top)/zoom)};
+}
+$('mapStage')?.addEventListener('pointerdown',e=>{
+  if(sessao.perfil!=='mestre'||!modoMascara)return;
+  if(e.button!==undefined&&e.button!==0)return;
+  if(e.target.closest('.token'))return;
+  e.preventDefault(); e.stopPropagation();
+  const p=coordenadaNoMapa(e); const stage=$('mapStage');
+  const preview=document.createElement('div'); preview.className=`mask-preview mask-${modoMascara}`;
+  preview.style.left=p.x+'px';preview.style.top=p.y+'px';preview.style.width='1px';preview.style.height='1px';
+  const op=Math.max(.15,Math.min(1,n($('maskOpacity')?.value,.9))); preview.style.setProperty('--mask-opacity',op*.45);
+  stage.appendChild(preview);
+  desenhoMascara={pointerId:e.pointerId,tipo:modoMascara,x0:p.x,y0:p.y,preview,opacidade:op};
+  try{stage.setPointerCapture?.(e.pointerId)}catch(_){}
+});
+$('mapStage')?.addEventListener('pointermove',e=>{
+  if(!desenhoMascara||e.pointerId!==desenhoMascara.pointerId)return;
+  e.preventDefault(); const p=coordenadaNoMapa(e); const d=desenhoMascara;
+  const x=Math.min(d.x0,p.x),y=Math.min(d.y0,p.y),w=Math.abs(p.x-d.x0),h=Math.abs(p.y-d.y0);
+  d.preview.style.left=x+'px';d.preview.style.top=y+'px';d.preview.style.width=w+'px';d.preview.style.height=h+'px';
+});
+function finalizarMascara(e){
+  if(!desenhoMascara||e.pointerId!==desenhoMascara.pointerId)return;
+  const d=desenhoMascara,p=coordenadaNoMapa(e); desenhoMascara=null;
+  const x=Math.min(d.x0,p.x),y=Math.min(d.y0,p.y),w=Math.abs(p.x-d.x0),h=Math.abs(p.y-d.y0); d.preview.remove();
+  if(w>=8&&h>=8)socket.emit('adicionarMascara',{tipo:d.tipo,x,y,w,h,opacidade:d.opacidade});
+}
+$('mapStage')?.addEventListener('pointerup',finalizarMascara);
+$('mapStage')?.addEventListener('pointercancel',e=>{if(desenhoMascara?.preview)desenhoMascara.preview.remove();desenhoMascara=null;});
 
 // ===== TRILHA SONORA SINCRONIZADA =====
 function aplicarTrilhaCenaNosControles(trilha){
