@@ -62,7 +62,7 @@ function extrairDriveId(url){
 }
 function converterLinkMidia(url){
   const original=String(url||'').trim(); if(!original) return '';
-  const id=extrairDriveId(original); return id?`https://drive.google.com/uc?export=download&id=${id}`:original;
+  const id=extrairDriveId(original); return id?`/drive-media/${encodeURIComponent(id)}`:original;
 }
 window.converterLinkMidia=converterLinkMidia;
 
@@ -281,8 +281,23 @@ function aplicarTrilhaCenaNosControles(trilha){
 }
 $('btnAtivarAudio')?.addEventListener('click',async()=>{
   const a=$('audioTrilha');
-  try{ a.muted=true; a.src=a.src||'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAFAAAACAAACAgICAgICAgICAgICAgICAgICAgICAgI'; await a.play(); a.pause(); a.currentTime=0; a.muted=false; audioDesbloqueado=true; $('btnAtivarAudio').classList.add('ready'); $('btnAtivarAudio').textContent='🔊 ÁUDIO ATIVO'; toast('Áudio liberado neste dispositivo.'); }
-  catch(_){ audioDesbloqueado=true; $('btnAtivarAudio').classList.add('ready'); $('btnAtivarAudio').textContent='🔊 ÁUDIO PRONTO'; toast('Áudio preparado. Se o navegador bloquear, clique novamente quando a trilha começar.'); }
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(Ctx){ window.__ordemAudioCtx=window.__ordemAudioCtx||new Ctx(); await window.__ordemAudioCtx.resume(); }
+    // Reprodução silenciosa iniciada pelo clique do usuário para liberar HTMLMediaElement.
+    a.muted=true;
+    a.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+    try{ await a.play(); }catch(_){ }
+    a.pause(); try{a.currentTime=0}catch(_){ }
+    a.removeAttribute('src'); a.load(); a.muted=false;
+    audioDesbloqueado=true;
+    $('btnAtivarAudio').classList.add('ready'); $('btnAtivarAudio').textContent='🔊 ÁUDIO ATIVO';
+    toast('Áudio liberado neste dispositivo.');
+  }catch(_){
+    audioDesbloqueado=true;
+    $('btnAtivarAudio').classList.add('ready'); $('btnAtivarAudio').textContent='🔊 ÁUDIO PRONTO';
+    toast('Áudio preparado.');
+  }
 });
 $('btnSalvarTrilha')?.addEventListener('click',()=>{
   const url=converterLinkMidia($('trilhaUrl').value.trim()); $('trilhaUrl').value=url;
@@ -303,7 +318,10 @@ function aplicarAudioComando(cmd){
   if(cmd.acao==='pause'){ a.pause(); if(Number.isFinite(n(cmd.offset,NaN))) try{a.currentTime=Math.max(0,n(cmd.offset))}catch(_){} return; }
   if(cmd.acao==='volume') return;
   if(cmd.acao==='play' && cmd.url){
-    const url=converterLinkMidia(cmd.url); if(a.src!==url && !a.src.endsWith(url)){ a.src=url; a.load(); }
+    const url=converterLinkMidia(cmd.url);
+    const atual=a.getAttribute('src')||'';
+    if(atual!==url){ a.src=url; a.load(); }
+    a.onerror=()=>toast('Não foi possível carregar a trilha. Verifique se o arquivo está público e se é MP3/OGG/WAV.','error');
     const elapsed=cmd.startedAt?Math.max(0,((cmd.serverNow||Date.now())-cmd.startedAt)/1000):0;
     const target=Math.max(0,n(cmd.offset)+elapsed);
     const start=()=>{ try{ if(Number.isFinite(a.duration)&&a.duration>0&&a.loop) a.currentTime=target%a.duration; else a.currentTime=target; }catch(_){}; a.play().catch(()=>{ toast('🔇 O navegador bloqueou o som. Clique em “ATIVAR ÁUDIO”.','error'); }); };
@@ -328,9 +346,15 @@ function mostrarCinematica(c){
     img.src=converterLinkImagem(c.url); img.classList.remove('hidden');
     if(c.duracao>0) cinematicTimer=setTimeout(()=>{ if(sessao.perfil==='mestre')socket.emit('encerrarCinematica'); else esconderCinematica(); },c.duracao*1000);
   }else{
-    video.src=converterLinkMidia(c.url); video.classList.remove('hidden'); video.controls=false; video.volume=1;
-    const playVideo=()=>video.play().catch(()=>{ $('cinematicAudioWarning').classList.remove('hidden'); video.controls=true; });
-    video.oncanplay=()=>{video.oncanplay=null;playVideo();};
+    video.src=converterLinkMidia(c.url); video.classList.remove('hidden'); video.controls=false; video.volume=1; video.load();
+    const aviso=$('cinematicAudioWarning');
+    const playVideo=()=>video.play().then(()=>aviso.classList.add('hidden')).catch(()=>{
+      aviso.textContent='▶ CLIQUE AQUI PARA REPRODUZIR A CINEMÁTICA COM SOM';
+      aviso.classList.remove('hidden'); video.controls=true;
+    });
+    aviso.onclick=()=>{ video.muted=false; playVideo(); };
+    video.onerror=()=>{ aviso.textContent='❌ Não foi possível carregar o vídeo. Verifique se está público e use MP4/WebM.'; aviso.classList.remove('hidden'); };
+    if(video.readyState>=2) playVideo(); else video.oncanplay=()=>{video.oncanplay=null;playVideo();};
     video.onended=()=>{ if(sessao.perfil==='mestre')socket.emit('encerrarCinematica'); else esconderCinematica(); };
   }
 }
