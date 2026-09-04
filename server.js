@@ -45,7 +45,7 @@ app.get('/drive-media/:id', async (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, versao: 'V4.5-CORRIGIDO' }));
+app.get('/health', (_req, res) => res.json({ ok: true, versao: 'V4.7-FOG-TOKENS-OCULTOS' }));
 
 const salas = new Map();
 
@@ -64,6 +64,7 @@ function cenaPadrao(nome = 'Cena 1') {
     nome,
     mapa: { url: '', largura: 1600, altura: 900 },
     tokens: [],
+    mascaras: [],
     trilha: { url: '', volume: 0.55, loop: true }
   };
 }
@@ -139,13 +140,22 @@ function audioOffsetAtual(a) {
   if (!a.playing) return Number(a.offset) || 0;
   return (Number(a.offset) || 0) + Math.max(0, (Date.now() - (Number(a.startedAt) || Date.now())) / 1000);
 }
-function estadoPublico(sala) {
+function resumoCenas(sala) {
+  return sala.cenas.map(c => ({ id: c.id, nome: c.nome, trilha: c.trilha }));
+}
+function tokensParaPerfil(cena, perfil) {
+  const lista = Array.isArray(cena.tokens) ? cena.tokens : [];
+  return perfil === 'mestre' ? lista : lista.filter(t => !t.oculto);
+}
+function estadoPublico(sala, perfil) {
   const cena = getCenaAtual(sala);
+  if (!Array.isArray(cena.mascaras)) cena.mascaras = [];
   return {
-    cenas: sala.cenas,
+    cenas: resumoCenas(sala),
     cenaAtualId: sala.cenaAtualId,
     mapa: cena.mapa,
-    tokens: cena.tokens,
+    tokens: tokensParaPerfil(cena, perfil),
+    mascaras: cena.mascaras,
     fichas: sala.fichas,
     jogadores: Object.values(sala.jogadores),
     audioState: sala.audioState,
@@ -153,12 +163,17 @@ function estadoPublico(sala) {
     serverNow: Date.now()
   };
 }
+function emitirTokens(key, sala) {
+  const cena = getCenaAtual(sala);
+  io.to(`${key}:mestres`).emit('tokensAtualizados', tokensParaPerfil(cena, 'mestre'));
+  io.to(`${key}:jogadores`).emit('tokensAtualizados', tokensParaPerfil(cena, 'jogador'));
+}
 function emitirCena(key, sala) {
   const cena = getCenaAtual(sala);
-  io.to(key).emit('cenaAtualizada', {
-    cenas: sala.cenas, cenaAtualId: sala.cenaAtualId,
-    mapa: cena.mapa, tokens: cena.tokens, trilha: cena.trilha
-  });
+  if (!Array.isArray(cena.mascaras)) cena.mascaras = [];
+  const base = { cenas: resumoCenas(sala), cenaAtualId: sala.cenaAtualId, mapa: cena.mapa, mascaras: cena.mascaras, trilha: cena.trilha };
+  io.to(`${key}:mestres`).emit('cenaAtualizada', { ...base, tokens: tokensParaPerfil(cena, 'mestre') });
+  io.to(`${key}:jogadores`).emit('cenaAtualizada', { ...base, tokens: tokensParaPerfil(cena, 'jogador') });
 }
 
 io.on('connection', socket => {
@@ -167,10 +182,11 @@ io.on('connection', socket => {
     const perfil = payload?.perfil === 'mestre' ? 'mestre' : 'jogador';
     const { key, sala } = getSala(payload?.sala);
     socket.join(key);
+    socket.join(`${key}:${perfil === 'mestre' ? 'mestres' : 'jogadores'}`);
     socket.data.sala = key; socket.data.nome = nome; socket.data.perfil = perfil;
     sala.jogadores[socket.id] = { nome, perfil };
     if (perfil === 'jogador' && !sala.fichas[nome]) sala.fichas[nome] = fichaPadrao(nome);
-    socket.emit('estadoInicial', { sala: key, ...estadoPublico(sala) });
+    socket.emit('estadoInicial', { sala: key, ...estadoPublico(sala, perfil) });
     io.to(key).emit('jogadoresAtualizados', Object.values(sala.jogadores));
   });
 
@@ -291,18 +307,57 @@ io.on('connection', socket => {
   socket.on('criarToken', token => {
     const key = socket.data.sala; if (!key || socket.data.perfil !== 'mestre') return;
     const sala = salas.get(key); const cena = getCenaAtual(sala);
-    const novo = { id: String(Date.now()) + Math.random().toString(16).slice(2), nome: String(token?.nome || 'Token'), dono: String(token?.dono || ''), imagem: converterLinkImagem(token?.imagem), x: Number(token?.x) || 200, y: Number(token?.y) || 200, tamanho: Number(token?.tamanho) || 72 };
-    cena.tokens.push(novo); io.to(key).emit('tokensAtualizados', cena.tokens);
+    const novo = {
+      id: String(Date.now()) + Math.random().toString(16).slice(2),
+      nome: String(token?.nome || 'Token'), dono: String(token?.dono || ''),
+      imagem: converterLinkImagem(token?.imagem), x: Number(token?.x) || 200, y: Number(token?.y) || 200,
+      tamanho: Number(token?.tamanho) || 72, oculto: !!token?.oculto
+    };
+    cena.tokens.push(novo); emitirTokens(key, sala);
   });
   socket.on('moverToken', ({ id, x, y }) => {
     const key = socket.data.sala; if (!key) return;
     const sala = salas.get(key); const cena = getCenaAtual(sala); const t = cena.tokens.find(t => t.id === id); if (!t) return;
-    const autorizado = socket.data.perfil === 'mestre' || (t.dono && t.dono === socket.data.nome); if (!autorizado) return;
-    t.x = Number(x) || 0; t.y = Number(y) || 0; io.to(key).emit('tokensAtualizados', cena.tokens);
+    const norm = v => String(v || '').trim().toLocaleLowerCase('pt-BR');
+    const autorizado = socket.data.perfil === 'mestre' || (t.dono && norm(t.dono) === norm(socket.data.nome));
+    if (!autorizado) return;
+    const nx = Number(x), ny = Number(y);
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+    t.x = nx; t.y = ny; emitirTokens(key, sala);
+  });
+  socket.on('alterarVisibilidadeToken', ({ id, oculto }) => {
+    const key = socket.data.sala; if (!key || socket.data.perfil !== 'mestre') return;
+    const sala = salas.get(key); const cena = getCenaAtual(sala); const t = cena.tokens.find(t => t.id === id); if (!t) return;
+    t.oculto = !!oculto; emitirTokens(key, sala);
   });
   socket.on('removerToken', id => {
     const key = socket.data.sala; if (!key || socket.data.perfil !== 'mestre') return;
-    const sala = salas.get(key); const cena = getCenaAtual(sala); cena.tokens = cena.tokens.filter(t => t.id !== id); io.to(key).emit('tokensAtualizados', cena.tokens);
+    const sala = salas.get(key); const cena = getCenaAtual(sala); cena.tokens = cena.tokens.filter(t => t.id !== id); emitirTokens(key, sala);
+  });
+
+  // NEBLINA / ESCURIDÃO POR CENA
+  socket.on('adicionarMascara', payload => {
+    const key = socket.data.sala; if (!key || socket.data.perfil !== 'mestre') return;
+    const sala = salas.get(key); const cena = getCenaAtual(sala);
+    if (!Array.isArray(cena.mascaras)) cena.mascaras = [];
+    const tipo = payload?.tipo === 'dim' ? 'dim' : 'fog';
+    const x = Number(payload?.x), y = Number(payload?.y), w = Number(payload?.w), h = Number(payload?.h);
+    if (![x,y,w,h].every(Number.isFinite) || w < 8 || h < 8) return;
+    const opacidadePadrao = tipo === 'fog' ? 0.94 : 0.5;
+    const opacidade = Math.max(0.1, Math.min(1, Number(payload?.opacidade) || opacidadePadrao));
+    cena.mascaras.push({ id: 'mask_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), tipo, x, y, w, h, opacidade });
+    io.to(key).emit('mascarasAtualizadas', cena.mascaras);
+  });
+  socket.on('removerMascara', id => {
+    const key = socket.data.sala; if (!key || socket.data.perfil !== 'mestre') return;
+    const sala = salas.get(key); const cena = getCenaAtual(sala);
+    cena.mascaras = (cena.mascaras || []).filter(m => m.id !== id);
+    io.to(key).emit('mascarasAtualizadas', cena.mascaras);
+  });
+  socket.on('limparMascaras', () => {
+    const key = socket.data.sala; if (!key || socket.data.perfil !== 'mestre') return;
+    const sala = salas.get(key); const cena = getCenaAtual(sala); cena.mascaras = [];
+    io.to(key).emit('mascarasAtualizadas', []);
   });
 
   socket.on('disconnect', () => {
@@ -311,4 +366,4 @@ io.on('connection', socket => {
   });
 });
 
-server.listen(PORT, () => console.log(`ORDEM VTT V4.5 ativo na porta ${PORT}`));
+server.listen(PORT, () => console.log(`ORDEM VTT V4.7 ativo na porta ${PORT}`));
