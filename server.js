@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const { Readable } = require('stream');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -8,8 +9,43 @@ const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
+// Proxy de mídia do Google Drive. Isso evita depender do link /uc diretamente no navegador,
+// que pode retornar uma página HTML em vez do MP3/MP4.
+app.get('/drive-media/:id', async (req, res) => {
+  const id = String(req.params.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!id) return res.status(400).send('ID inválido');
+
+  const candidates = [
+    `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`,
+    `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}&confirm=t`
+  ];
+
+  try {
+    let upstream = null;
+    for (const url of candidates) {
+      const headers = { 'User-Agent': 'Mozilla/5.0 ORDEM-VTT/4.5' };
+      if (req.headers.range) headers.Range = req.headers.range;
+      const r = await fetch(url, { headers, redirect: 'follow' });
+      const ct = String(r.headers.get('content-type') || '').toLowerCase();
+      if (r.ok && !ct.includes('text/html')) { upstream = r; break; }
+    }
+    if (!upstream) return res.status(502).send('O Google Drive não liberou o arquivo como mídia. Confirme que está em “Qualquer pessoa com o link”.');
+
+    res.status(upstream.status);
+    for (const h of ['content-type','content-length','content-range','accept-ranges','cache-control','etag','last-modified']) {
+      const v = upstream.headers.get(h); if (v) res.setHeader(h, v);
+    }
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    if (!upstream.body) return res.end();
+    Readable.fromWeb(upstream.body).pipe(res);
+  } catch (err) {
+    console.error('Erro proxy Drive:', err);
+    res.status(502).send('Falha ao carregar mídia do Google Drive.');
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, versao: 'V4.4-CENAS-AUDIO-CINEMATICAS' }));
+app.get('/health', (_req, res) => res.json({ ok: true, versao: 'V4.5-CORRIGIDO' }));
 
 const salas = new Map();
 
@@ -96,7 +132,7 @@ function converterLinkMidia(url) {
   const original = String(url || '').trim();
   if (!original) return '';
   const id = extrairDriveId(original);
-  return id ? `https://drive.google.com/uc?export=download&id=${id}` : original;
+  return id ? `/drive-media/${encodeURIComponent(id)}` : original;
 }
 function audioOffsetAtual(a) {
   if (!a) return 0;
@@ -275,4 +311,4 @@ io.on('connection', socket => {
   });
 });
 
-server.listen(PORT, () => console.log(`ORDEM VTT V4.4 ativo na porta ${PORT}`));
+server.listen(PORT, () => console.log(`ORDEM VTT V4.5 ativo na porta ${PORT}`));
