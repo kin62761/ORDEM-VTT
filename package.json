@@ -1,15 +1,14 @@
 {
-  "name": "ordem-vtt-socket-v2-1",
-  "version": "3.0.0",
+  "name": "ordem-vtt-socket-v4",
+  "version": "4.0.0",
   "private": true,
-  "description": "ORDEM VTT em tempo real com Node.js e Socket.IO",
+  "description": "ORDEM VTT V4 - ficha automatica em tempo real com habilidades e consumo de PE",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^5.1.0",
-    "socket.io": "^4.8.1",
-    "@supabase/supabase-js": "^2.57.0"
+    "socket.io": "^4.8.1"
   }
 }
