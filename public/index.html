@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ORDEM VTT V3</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div id="login" class="login"><div class="card"><h1>🔻 ORDEM VTT</h1><p>SELO DAS ARMAS • V3</p><input id="nome" placeholder="Seu nome"><input id="sala" value="SELO"><select id="perfil"><option value="jogador">Jogador</option><option value="mestre">Mestre</option></select><button id="entrar">ENTRAR</button></div></div>
+<div id="app" class="hidden">
+<header><b>🔻 ORDEM VTT</b><span id="info"></span><span id="status">●</span></header>
+<main id="player" class="player hidden">
+<aside class="sheet">
+<h2>FICHA DO JOGADOR</h2>
+<div class="grid2"><label>Personagem<input id="personagem"></label><label>Origem<input id="origem"></label><label>Classe<input id="classe"></label><label>Trilha<input id="trilha"></label><label>NEX %<input id="nex" type="number"></label><label>Defesa<input id="defesa" type="number"></label></div>
+<div class="bars"><label>PV <input id="pv" type="number"> / <input id="pvMax" type="number"></label><label>PE <input id="pe" type="number"> / <input id="peMax" type="number"></label><label>SAN <input id="san" type="number"> / <input id="sanMax" type="number"></label></div>
+<h3>ATRIBUTOS</h3><div class="attrs"><label>AGI<input id="agi" type="number"></label><label>FOR<input id="for" type="number"></label><label>INT<input id="int" type="number"></label><label>PRE<input id="pre" type="number"></label><label>VIG<input id="vig" type="number"></label></div>
+<nav><button data-tab="pericias" class="on">Perícias</button><button data-tab="ataques">Ataques</button><button data-tab="inventario">Inventário</button><button data-tab="dados">Dados</button></nav>
+<section id="pericias" class="tab"></section><section id="ataques" class="tab hidden"></section><section id="inventario" class="tab hidden"></section>
+<section id="dados" class="tab hidden"><div class="dice"><button>d4</button><button>d6</button><button>d8</button><button>d10</button><button>d12</button><button>d20</button><button>d100</button></div><div id="log"></div></section>
+<div id="save">✓ Sincronizada</div>
+</aside>
+<section class="map"><div class="tools"><button id="panP">✋</button><button id="selP">👆</button><button id="minusP">−</button><button id="plusP">+</button><button id="centerP">⌖</button></div><div id="vpP" class="vp"><div id="worldP" class="world"><img><div class="tokens"></div></div></div></section>
+</main>
+<main id="master" class="master hidden"><aside class="masterbar"><h2>MESTRE</h2><h3>Mapa</h3><input id="mapUrl" placeholder="URL da imagem"><div class="grid2"><input id="mapW" type="number" value="1600"><input id="mapH" type="number" value="900"></div><button id="saveMap">CARREGAR MAPA</button><h3>Token</h3><input id="tokNome" placeholder="Nome"><input id="tokImg" placeholder="Imagem / GIF"><input id="tokDono" placeholder="Dono"><button id="addTok">+ TOKEN</button><h3>Fichas</h3><div class="inline"><input id="newSheet" placeholder="Jogador"><button id="addSheet">+</button></div><div id="sheetList"></div><h3>Conectados</h3><div id="playersList"></div><h3>Rolagens</h3><div id="masterLog"></div></aside><section class="map"><div class="tools"><button id="panM">✋</button><button id="selM">👆</button><button id="minusM">−</button><button id="plusM">+</button><button id="centerM">⌖</button></div><div id="vpM" class="vp"><div id="worldM" class="world"><img><div class="tokens"></div></div></div></section></main>
+</div>
+<script src="/socket.io/socket.io.js"></script><script src="app.js"></script>
+</body></html>
