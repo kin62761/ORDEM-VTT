@@ -1,0 +1,15 @@
+{
+  "name": "ordem-vtt-socket-v2-1",
+  "version": "3.0.0",
+  "private": true,
+  "description": "ORDEM VTT em tempo real com Node.js e Socket.IO",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1",
+    "@supabase/supabase-js": "^2.57.0"
+  }
+}
