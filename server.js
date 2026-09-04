@@ -45,7 +45,7 @@ app.get('/drive-media/:id', async (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, versao: 'V4.7-FOG-TOKENS-OCULTOS' }));
+app.get('/health', (_req, res) => res.json({ ok: true, versao: 'V4.8-FICHA-AUTO-BORDA-PNG' }));
 
 const salas = new Map();
 
@@ -54,7 +54,8 @@ function fichaPadrao(nome = '') {
     jogador: nome, personagem: nome, origem: '', classe: '', trilha: '', nex: 5, defesa: 10,
     pv: 20, pvMax: 20, pe: 10, peMax: 10, san: 20, sanMax: 20,
     atributos: { agi: 1, for: 1, int: 1, pre: 1, vig: 1 },
-    pericias: [], ataques: [], habilidades: [], inventario: [], rituais: [], anotacoes: '', updatedAt: Date.now()
+    pericias: [], ataques: [], habilidades: [], inventario: [], rituais: [], anotacoes: '',
+    fichaAutomatica: true, updatedAt: Date.now()
   };
 }
 
@@ -310,7 +311,9 @@ io.on('connection', socket => {
     const novo = {
       id: String(Date.now()) + Math.random().toString(16).slice(2),
       nome: String(token?.nome || 'Token'), dono: String(token?.dono || ''),
-      imagem: converterLinkImagem(token?.imagem), x: Number(token?.x) || 200, y: Number(token?.y) || 200,
+      imagem: converterLinkImagem(token?.imagem),
+      borda: converterLinkImagem(token?.borda),
+      x: Number(token?.x) || 200, y: Number(token?.y) || 200,
       tamanho: Number(token?.tamanho) || 72, oculto: !!token?.oculto
     };
     cena.tokens.push(novo); emitirTokens(key, sala);
