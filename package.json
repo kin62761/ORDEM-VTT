@@ -1,6 +1,6 @@
 {
   "name": "ordem-vtt-socket-v4-4",
-  "version": "4.4.0",
+  "version": "4.7.0",
   "private": true,
   "description": "ORDEM VTT em tempo real com fichas, cenas, trilha sonora e cinematicas sincronizadas",
   "main": "server.js",
