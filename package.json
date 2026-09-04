@@ -1,8 +1,8 @@
 {
-  "name": "ordem-vtt-socket-v4",
-  "version": "4.0.0",
+  "name": "ordem-vtt-socket-v4-4",
+  "version": "4.4.0",
   "private": true,
-  "description": "ORDEM VTT V4 - ficha automatica em tempo real com habilidades e consumo de PE",
+  "description": "ORDEM VTT em tempo real com fichas, cenas, trilha sonora e cinematicas sincronizadas",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
