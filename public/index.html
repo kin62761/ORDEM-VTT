@@ -49,9 +49,16 @@
               <label>PERSONAGEM<input id="personagem"></label>
               <label>JOGADOR<input id="jogadorVisual" disabled></label>
               <label>ORIGEM<input id="origem"></label>
-              <label>CLASSE<input id="classe"></label>
+              <label>CLASSE
+                <select id="classe">
+                  <option value="">Selecionar...</option>
+                  <option value="Combatente">Combatente</option>
+                  <option value="Especialista">Especialista</option>
+                  <option value="Ocultista">Ocultista</option>
+                </select>
+              </label>
               <label>TRILHA<input id="trilha"></label>
-              <label>NEX %<input id="nex" type="number" min="0" max="99"></label>
+              <label>NEX %<input id="nex" type="number" min="5" max="99" step="5"></label>
             </div>
           </div>
 
@@ -62,6 +69,13 @@
             <label class="attr-orb attr-int"><input id="int" type="number"><span>INTELECTO<br><b>INT</b></span></label>
             <label class="attr-orb attr-pre"><input id="pre" type="number"><span>PRESENÇA<br><b>PRE</b></span></label>
             <label class="attr-orb attr-vig"><input id="vig" type="number"><span>VIGOR<br><b>VIG</b></span></label>
+          </div>
+
+          <div class="sheet-auto-panel">
+            <label class="check-label"><input id="fichaAutomatica" type="checkbox" checked> ⚙️ Ficha automática</label>
+            <button id="btnRecalcularFicha" type="button">RECALCULAR</button>
+            <button id="btnRestaurarRecursos" type="button">RESTAURAR PV / PE / SAN</button>
+            <small>Classe + NEX + atributos calculam PV, PE, SAN, Defesa e PE por turno. O sistema preserva dano e PE já gastos quando o máximo muda.</small>
           </div>
 
           <div class="quick-stats">
@@ -158,6 +172,7 @@
         <input id="tokenNome" placeholder="Nome do token" />
         <input id="tokenDono" placeholder="Dono (nome exato)" />
         <input id="tokenImagem" placeholder="Imagem/GIF ou link público do Google Drive" />
+        <input id="tokenBorda" placeholder="Borda PNG transparente (URL ou Google Drive) — opcional" />
         <input id="tokenTamanho" type="number" value="72" />
         <label class="check-label token-hidden-check"><input id="tokenOculto" type="checkbox"> Criar token oculto para jogadores</label>
         <button id="btnCriarToken">+ Token</button>
