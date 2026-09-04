@@ -132,7 +132,7 @@ socket.on('jogadoresAtualizados',atualizarJogadores);
 socket.on('rolagemCompartilhada',r=>{ const txt=`${r.jogador}: ${r.contexto||'Rolagem'} → ${r.expressao}`; if($('rolagemLog')) $('rolagemLog').textContent=txt; if($('rolagemLogMapa')) $('rolagemLogMapa').textContent=txt; });
 
 function atualizarJogadores(lista){ $('jogadoresLista').textContent=(lista||[]).map(j=>`${j.nome}${j.perfil==='mestre'?' (Mestre)':''}`).join(', ')||'—'; }
-function fichaPadraoLocal(nome){return {jogador:nome,personagem:nome,origem:'',classe:'',trilha:'',nex:5,defesa:10,pv:20,pvMax:20,pe:10,peMax:10,san:20,sanMax:20,atributos:{agi:1,for:1,int:1,pre:1,vig:1},pericias:[],ataques:[],habilidades:[],inventario:[],rituais:[],anotacoes:''};}
+function fichaPadraoLocal(nome){return {jogador:nome,personagem:nome,origem:'',classe:'',trilha:'',nex:5,defesa:11,pv:21,pvMax:21,pe:3,peMax:3,san:12,sanMax:12,atributos:{agi:1,for:1,int:1,pre:1,vig:1},pericias:[],ataques:[],habilidades:[],inventario:[],rituais:[],anotacoes:'',fichaAutomatica:true};}
 function carregarFicha(nome){ fichaAtualNome=nome; ficha=structuredClone(fichas[nome]||fichaPadraoLocal(nome)); preencherFicha(); }
 function atualizarSelectMestre(){
   const s=$('fichaMestreSelect'); const atual=fichaAtualNome; s.innerHTML='<option value="">Selecionar ficha...</option>'+Object.keys(fichas).sort().map(nm=>`<option>${esc(nm)}</option>`).join(''); s.value=atual;
@@ -140,12 +140,77 @@ function atualizarSelectMestre(){
 $('fichaMestreSelect').onchange=e=>{ if(e.target.value) carregarFicha(e.target.value); };
 $('btnCriarFicha').onclick=()=>{ const nome=$('novaFichaNome').value.trim(); if(!nome)return; socket.emit('criarFicha',{nome}); $('novaFichaNome').value=''; };
 
+
+function normalizarClasse(v){
+  const x=String(v||'').trim().toLocaleLowerCase('pt-BR');
+  if(x==='combatente')return 'Combatente';
+  if(x==='especialista')return 'Especialista';
+  if(x==='ocultista')return 'Ocultista';
+  return String(v||'').trim();
+}
+function nivelPorNex(nex){
+  const v=Math.max(5,Math.min(99,n(nex,5)));
+  if(v>=99)return 20;
+  return Math.max(1,Math.floor(v/5));
+}
+function calcularBaseFicha(f){
+  const classe=normalizarClasse(f?.classe);
+  const a=f?.atributos||{};
+  const vig=n(a.vig,0), pre=n(a.pre,0), agi=n(a.agi,0);
+  const nivel=nivelPorNex(f?.nex);
+  let pvBase=0,pvNivel=0,peBase=0,peNivel=0,sanBase=0,sanNivel=0;
+  if(classe==='Combatente'){
+    pvBase=20+vig; pvNivel=4+vig; peBase=2+pre; peNivel=2+pre; sanBase=12; sanNivel=3;
+  }else if(classe==='Especialista'){
+    pvBase=16+vig; pvNivel=3+vig; peBase=3+pre; peNivel=3+pre; sanBase=16; sanNivel=4;
+  }else if(classe==='Ocultista'){
+    pvBase=12+vig; pvNivel=2+vig; peBase=4+pre; peNivel=4+pre; sanBase=20; sanNivel=5;
+  }else{
+    return {valido:false,defesa:10+agi,peTurno:nivel};
+  }
+  return {
+    valido:true,
+    pvMax:Math.max(1,pvBase+(nivel-1)*pvNivel),
+    peMax:Math.max(0,peBase+(nivel-1)*peNivel),
+    sanMax:Math.max(0,sanBase+(nivel-1)*sanNivel),
+    defesa:10+agi, peTurno:nivel
+  };
+}
+function ajustarAtualAoNovoMax(atual,maxAntigo,maxNovo){
+  atual=n(atual,0); maxAntigo=n(maxAntigo,0); maxNovo=n(maxNovo,0);
+  if(maxAntigo<=0)return maxNovo;
+  const gasto=Math.max(0,maxAntigo-atual);
+  return Math.max(0,Math.min(maxNovo,maxNovo-gasto));
+}
+function recalcularFichaAutomatica({restaurar=false,salvar=true}={}){
+  if(!ficha)return;
+  ficha.fichaAutomatica=!!$('fichaAutomatica')?.checked;
+  const calc=calcularBaseFicha(ficha);
+  ficha.defesa=calc.defesa;
+  if(calc.valido && ficha.fichaAutomatica){
+    const oldPvMax=n(ficha.pvMax), oldPeMax=n(ficha.peMax), oldSanMax=n(ficha.sanMax);
+    const oldPv=n(ficha.pv), oldPe=n(ficha.pe), oldSan=n(ficha.san);
+    ficha.pvMax=calc.pvMax; ficha.peMax=calc.peMax; ficha.sanMax=calc.sanMax;
+    if(restaurar){
+      ficha.pv=ficha.pvMax; ficha.pe=ficha.peMax; ficha.san=ficha.sanMax;
+    }else{
+      ficha.pv=ajustarAtualAoNovoMax(oldPv,oldPvMax,ficha.pvMax);
+      ficha.pe=ajustarAtualAoNovoMax(oldPe,oldPeMax,ficha.peMax);
+      ficha.san=ajustarAtualAoNovoMax(oldSan,oldSanMax,ficha.sanMax);
+    }
+  }
+  for(const id of ['defesa','pv','pvMax','pe','peMax','san','sanMax']) if($(id)) $(id).value=ficha[id]??0;
+  atualizarVisualFicha();
+  if(salvar) salvarFicha();
+}
+
 function preencherFicha(){
   if(!ficha)return;
   if($('tituloFicha')) if($('tituloFicha')) $('tituloFicha').textContent=(ficha.personagem||fichaAtualNome||'PERSONAGEM').toUpperCase();
   atualizarVisualFicha();
   for(const id of ['personagem','origem','classe','trilha','nex','defesa','pv','pvMax','pe','peMax','san','sanMax']) $(id).value=ficha[id]??'';
   for(const id of ['agi','for','int','pre','vig']) $(id).value=ficha.atributos?.[id]??0;
+  if($('fichaAutomatica')) $('fichaAutomatica').checked=ficha.fichaAutomatica!==false;
   $('anotacoes').value=ficha.anotacoes||'';
   renderPericias(); renderAtaques(); renderHabilidades(); renderInventario(); renderRituais(); atualizarVisualFicha();
 }
@@ -153,6 +218,8 @@ function preencherFicha(){
 function lerCamposBase(){
   if(!ficha)return;
   for(const id of ['personagem','origem','classe','trilha']) ficha[id]=$(id).value;
+  ficha.classe=normalizarClasse(ficha.classe);
+  ficha.fichaAutomatica=!!$('fichaAutomatica')?.checked;
   for(const id of ['nex','defesa','pv','pvMax','pe','peMax','san','sanMax']) ficha[id]=n($(id).value);
   ficha.atributos={}; for(const id of ['agi','for','int','pre','vig']) ficha.atributos[id]=n($(id).value);
   ficha.anotacoes=$('anotacoes').value;
@@ -161,7 +228,28 @@ function lerCamposBase(){
 }
 function agendarSalvar(){ clearTimeout(saveTimer); saveTimer=setTimeout(salvarFicha,220); }
 function salvarFicha(){ if(!ficha||!fichaAtualNome)return; lerCamposBase(); socket.emit('atualizarFicha',{nome:fichaAtualNome,ficha}); }
-['personagem','origem','classe','trilha','nex','defesa','pv','pvMax','pe','peMax','san','sanMax','agi','for','int','pre','vig','anotacoes'].forEach(id=>$(id).addEventListener('input',agendarSalvar));
+['personagem','origem','classe','trilha','nex','defesa','pv','pvMax','pe','peMax','san','sanMax','agi','for','int','pre','vig','anotacoes'].forEach(id=>{
+  $(id)?.addEventListener('input',()=>{
+    lerCamposBase();
+    if($('fichaAutomatica')?.checked && ['classe','nex','agi','vig','pre'].includes(id)){
+      recalcularFichaAutomatica({restaurar:false,salvar:false});
+    }
+    agendarSalvar();
+  });
+});
+$('classe')?.addEventListener('change',()=>{
+  lerCamposBase();
+  if($('fichaAutomatica')?.checked) recalcularFichaAutomatica({restaurar:false,salvar:false});
+  agendarSalvar();
+});
+$('fichaAutomatica')?.addEventListener('change',()=>{
+  if(!ficha)return;
+  ficha.fichaAutomatica=$('fichaAutomatica').checked;
+  if(ficha.fichaAutomatica) recalcularFichaAutomatica({restaurar:false,salvar:true});
+  else salvarFicha();
+});
+$('btnRecalcularFicha')?.addEventListener('click',()=>recalcularFichaAutomatica({restaurar:false,salvar:true}));
+$('btnRestaurarRecursos')?.addEventListener('click',()=>recalcularFichaAutomatica({restaurar:true,salvar:true}));
 
 document.querySelectorAll('.tabs button').forEach(btn=>btn.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b===btn));
@@ -261,7 +349,15 @@ $('btnRenomearCena')?.addEventListener('click',()=>{ const nome=$('renomearCenaN
 $('btnRemoverCena')?.addEventListener('click',()=>{ if(cenas.length<=1)return toast('É preciso manter pelo menos uma cena.','error'); if(confirm('Excluir esta cena e os tokens dela?'))socket.emit('removerCena',{id:cenaAtualId}); });
 
 $('btnSalvarMapa').onclick=()=>{ const original=$('mapUrl').value.trim(); const url=converterLinkImagem(original); $('mapUrl').value=url; socket.emit('salvarMapa',{url,largura:n($('mapW').value,1600),altura:n($('mapH').value,900)}); toast(original!==url?'Mapa salvo. Link do Google Drive convertido automaticamente.':'Mapa salvo nesta cena.'); };
-$('btnCriarToken').onclick=()=>{ const original=$('tokenImagem').value.trim(); const imagem=converterLinkImagem(original); $('tokenImagem').value=imagem; const oculto=!!$('tokenOculto')?.checked; socket.emit('criarToken',{nome:$('tokenNome').value,dono:$('tokenDono').value,imagem,tamanho:n($('tokenTamanho').value,72),oculto}); toast(oculto?'Token criado oculto para os jogadores.':(original && original!==imagem?'Token criado. Link do Google Drive convertido automaticamente.':'Token criado nesta cena.')); };
+$('btnCriarToken').onclick=()=>{
+  const original=$('tokenImagem').value.trim();
+  const bordaOriginal=$('tokenBorda')?.value.trim()||'';
+  const imagem=converterLinkImagem(original), borda=converterLinkImagem(bordaOriginal);
+  $('tokenImagem').value=imagem; if($('tokenBorda'))$('tokenBorda').value=borda;
+  const oculto=!!$('tokenOculto')?.checked;
+  socket.emit('criarToken',{nome:$('tokenNome').value,dono:$('tokenDono').value,imagem,borda,tamanho:n($('tokenTamanho').value,72),oculto});
+  toast(oculto?'Token criado oculto para os jogadores.':(borda?'Token criado com borda PNG.':(original && original!==imagem?'Token criado. Link do Google Drive convertido automaticamente.':'Token criado nesta cena.')));
+};
 $('zoomMais').onclick=()=>{zoom=Math.min(2.5,zoom+.1);aplicarZoom();}; $('zoomMenos').onclick=()=>{zoom=Math.max(.35,zoom-.1);aplicarZoom();}; $('zoomReset').onclick=()=>{zoom=1;aplicarZoom();};
 function aplicarMapa(){ const s=$('mapStage'); s.style.width=`${mapa.largura}px`; s.style.height=`${mapa.altura}px`; const mapImg=converterLinkImagem(mapa.url); s.style.backgroundImage=mapImg?`url("${mapImg.replace(/"/g,'%22')}")`:'none'; $('mapUrl').value=mapa.url||''; $('mapW').value=mapa.largura||1600; $('mapH').value=mapa.altura||900; aplicarZoom(); }
 function aplicarZoom(){ $('mapStage').style.transform=`scale(${zoom})`; $('zoomReset').textContent=`${Math.round(zoom*100)}%`; }
@@ -285,8 +381,13 @@ function renderTokens(){
     el.dataset.id=t.id; el.dataset.movable=permitido?'1':'0';
     el.title=t.oculto&&sessao.perfil==='mestre'?`${t.nome} — OCULTO DOS JOGADORES`:(permitido?`${t.nome} — arraste para mover`:`${t.nome}${t.dono?' — pertence a '+t.dono:' — sem dono'}`);
     const tokenImg=converterLinkImagem(t.imagem);
-    const conteudo=tokenImg?`<img draggable="false" src="${esc(tokenImg)}" alt="${esc(t.nome)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span style="display:none">${esc(t.nome)}</span>`:`<span>${esc(t.nome)}</span>`;
-    el.innerHTML=conteudo+(sessao.perfil==='mestre'?`<button class="token-eye" type="button" title="${t.oculto?'Mostrar aos jogadores':'Ocultar dos jogadores'}">${t.oculto?'🙈':'👁'}</button>`:'');
+    const tokenBorda=converterLinkImagem(t.borda);
+    if(!tokenBorda) el.classList.add('no-png-frame');
+    const retrato=tokenImg
+      ? `<img class="token-art" draggable="false" src="${esc(tokenImg)}" alt="${esc(t.nome)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="token-fallback" style="display:none">${esc(t.nome)}</span>`
+      : `<span class="token-fallback">${esc(t.nome)}</span>`;
+    const frame=tokenBorda?`<img class="token-frame" draggable="false" src="${esc(tokenBorda)}" alt="" aria-hidden="true" onerror="this.style.display='none'">`:'';
+    el.innerHTML=`<div class="token-media">${retrato}${frame}</div>`+(sessao.perfil==='mestre'?`<button class="token-eye" type="button" title="${t.oculto?'Mostrar aos jogadores':'Ocultar dos jogadores'}">${t.oculto?'🙈':'👁'}</button>`:'');
     s.appendChild(el);
     if(sessao.perfil==='mestre'){
       const eye=el.querySelector('.token-eye');
