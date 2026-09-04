@@ -1,35 +1,21 @@
-ORDEM VTT SOCKET V4 - FICHA AUTOMATICA
+ORDEM VTT V4.2 — DESIGN MELHORADO
 
-RECURSOS PRINCIPAIS
-- Sala em tempo real com Socket.IO
-- Mestre e jogadores
-- Ficha sincronizada em tempo real
-- PV / PE / SAN
-- Pericias, ataques, habilidades, inventario, rituais e anotacoes
-- Habilidades descontam PE automaticamente
-- Tipo "Proximo ataque" e desmarcado depois que o ataque e usado
-- Bonus de teste e dano de habilidades ativas entram no ataque
-- Ritual desconta PE automaticamente
-- Bloqueio quando PE e insuficiente
-- Mapa, tokens, imagem/GIF e movimentacao em tempo real
-
-PUBLICACAO NO RENDER
-Build Command: npm install
-Start Command: node server.js
-
-ESTRUTURA CORRETA NO GITHUB
+Arquivos:
 server.js
 package.json
-README.txt
-public/
-  index.html
-  app.js
-  style.css
+public/index.html
+public/app.js
+public/style.css
 
-TESTE
-/health deve responder:
-{"ok":true,"versao":"V4-FICHA-AUTOMATICA"}
+Melhorias visuais:
+- Topo e navegação mais profissionais
+- Ficha com contraste e acabamento melhores
+- Atributos em destaque com sigilo redesenhado
+- Vida, Sanidade e Esforço com barras mais bonitas
+- Tabelas de perícias mais legíveis
+- Combate, habilidades e inventário em cards
+- Habilidade ativa com destaque visual
+- Interface responsiva
+- Mantém as automações da V4.1, incluindo desconto automático de PE
 
-IMPORTANTE
-Esta V4 ainda usa memoria do servidor. Se o Render reiniciar, os dados podem ser perdidos.
-A persistencia em Supabase pode ser integrada depois sem mudar a interface da ficha.
+No GitHub, mantenha exatamente a pasta public com index.html, app.js e style.css.
