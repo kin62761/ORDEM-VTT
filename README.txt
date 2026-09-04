@@ -1,34 +1,18 @@
-ORDEM VTT V4.4 — CENAS + TRILHA SONORA + CINEMÁTICAS
+ORDEM VTT V4.8 — FICHA AUTOMÁTICA + BORDA PNG
 
-NOVO:
-- Várias cenas por sala. Cada cena possui mapa, tokens e trilha sonora próprios.
-- Mestre troca a cena e todos os jogadores mudam juntos.
-- Trilha sonora sincronizada: tocar, pausar, parar, volume e loop.
-- Cinemática para todos: vídeo ou imagem em tela cheia.
-- Ao iniciar uma cinematica, a trilha da cena é pausada; ao encerrar, volta automaticamente.
-- Links públicos do Google Drive continuam sendo convertidos automaticamente.
-- Ficha automática V4 mantida: gasto automático de PE e habilidade de próximo ataque desmarcada após atacar.
+NOVO
+• Ficha automática por Classe + NEX + atributos.
+• Calcula PV Máx., PE Máx., SAN Máx., Defesa e PE por turno.
+• Ao alterar NEX/VIG/PRE/AGI, preserva dano e PE já gastos.
+• Botões RECALCULAR e RESTAURAR PV / PE / SAN.
+• Pode desligar a ficha automática para edição manual.
+• Habilidades continuam descontando PE e as de próximo ataque desligam após atacar.
 
-IMPORTANTE SOBRE AUDIO/VIDEO:
-Navegadores podem bloquear reprodução automática com som. Cada jogador deve clicar uma vez em “ATIVAR ÁUDIO” depois de entrar na sala.
-Para melhor compatibilidade, prefira arquivos MP3/OGG para trilhas e MP4/WebM para cinematica.
-No Google Drive, deixe o arquivo como “Qualquer pessoa com o link — Leitor”.
+TOKENS
+• Novo campo “Borda PNG transparente”.
+• Aceita URL comum ou Google Drive público.
+• A moldura PNG fica sobre a arte do token e acompanha tamanho/movimento.
+• Sem PNG, o token usa uma borda circular simples.
 
-ESTRUTURA NO GITHUB:
-server.js
-package.json
-README.txt
-public/
-  index.html
-  app.js
-  style.css
-
-RENDER:
-Build Command: npm install
-Start Command: node server.js
-
-TESTE:
-/health deve mostrar versao V4.4-CENAS-AUDIO-CINEMATICAS.
-
-OBSERVACAO:
-Os dados ainda ficam na memoria do servidor. Quando o Render reinicia, podem ser perdidos. A persistencia no Supabase entra na etapa seguinte.
+Mantido da V4.7
+• Cenas, mapas, áudio, cinematics, neblina, áreas escuras, tokens ocultos e tempo real.
