@@ -3,109 +3,139 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ORDEM VTT • V4</title>
+  <title>ORDEM VTT • Ficha Automática</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🔻 ORDEM VTT <span>SELO DAS ARMAS • V4</span></div>
+    <div class="brand"><span class="brand-mark">▼</span><div><strong>ORDEM <em>VTT</em></strong><small>MESA VIRTUAL • SELO DAS ARMAS</small></div></div>
+    <nav class="main-nav hidden" id="mainNav">
+      <button id="navMapa">◫ <span>MAPA</span></button>
+      <button id="navFicha" class="active">♙ <span>FICHA</span></button>
+    </nav>
     <div class="login" id="loginBox">
       <input id="nomeEntrada" placeholder="Seu nome" />
       <input id="salaEntrada" value="SELO" placeholder="Sala" />
       <select id="perfilEntrada"><option value="jogador">Jogador</option><option value="mestre">Mestre</option></select>
       <button id="btnEntrar">ENTRAR</button>
     </div>
-    <div id="statusOnline" class="status hidden">● CONECTADO</div>
+    <div id="statusOnline" class="status hidden">● ONLINE</div>
   </header>
 
   <main id="app" class="app hidden">
-    <section class="ficha-panel">
-      <div class="sheet-head">
-        <div>
-          <small>FICHA DO JOGADOR</small>
-          <h1 id="tituloFicha">PERSONAGEM</h1>
+    <section id="sheetScreen" class="screen sheet-screen">
+      <aside class="character-sidebar">
+        <div class="sidebar-title"><b>PERSONAGENS</b><button id="btnNovoFichaVisual" class="tiny-btn hidden">+ NOVO</button></div>
+        <div id="seletorFichaMestre" class="master-card hidden">
+          <input id="novaFichaNome" placeholder="Nome do jogador" />
+          <button id="btnCriarFicha">Criar ficha</button>
+          <select id="fichaMestreSelect"></select>
         </div>
-        <div class="sync">✓ Sincronizada</div>
-      </div>
-
-      <div id="seletorFichaMestre" class="master-card hidden">
-        <input id="novaFichaNome" placeholder="Nome do jogador" />
-        <button id="btnCriarFicha">Criar ficha</button>
-        <select id="fichaMestreSelect"></select>
-      </div>
-
-      <div class="vitals">
-        <div class="vital pv"><b>PV</b><span><input id="pv" type="number"> / <input id="pvMax" type="number"></span></div>
-        <div class="vital pe"><b>PE</b><span><input id="pe" type="number"> / <input id="peMax" type="number"></span></div>
-        <div class="vital san"><b>SAN</b><span><input id="san" type="number"> / <input id="sanMax" type="number"></span></div>
-      </div>
-
-      <nav class="tabs">
-        <button data-tab="resumo" class="active">Resumo</button>
-        <button data-tab="pericias">Perícias</button>
-        <button data-tab="combate">Combate</button>
-        <button data-tab="habilidades">Habilidades</button>
-        <button data-tab="inventario">Inventário</button>
-        <button data-tab="rituais">Rituais</button>
-        <button data-tab="anotacoes">Anotações</button>
-      </nav>
-
-      <div class="tab active" id="tab-resumo">
-        <div class="grid2">
-          <label>Personagem<input id="personagem"></label>
-          <label>Origem<input id="origem"></label>
-          <label>Classe<input id="classe"></label>
-          <label>Trilha<input id="trilha"></label>
-          <label>NEX %<input id="nex" type="number" min="0" max="99"></label>
-          <label>Defesa<input id="defesa" type="number"></label>
+        <div class="character-current">
+          <div class="avatar-mini">◉</div>
+          <div><strong id="sidebarNome">PERSONAGEM</strong><small id="sidebarInfo">NEX 5% • —</small></div>
         </div>
-        <h3>ATRIBUTOS</h3>
-        <div class="attrs">
-          <label>AGI<input id="agi" type="number"></label>
-          <label>FOR<input id="for" type="number"></label>
-          <label>INT<input id="int" type="number"></label>
-          <label>PRE<input id="pre" type="number"></label>
-          <label>VIG<input id="vig" type="number"></label>
+        <div class="sidebar-foot">
+          <span>Jogadores na sala</span>
+          <div id="jogadoresLista">—</div>
         </div>
-      </div>
+      </aside>
 
-      <div class="tab" id="tab-pericias">
-        <div class="section-actions"><h3>PERÍCIAS</h3><button id="addPericia">+ Perícia</button></div>
-        <div id="listaPericias"></div>
-      </div>
+      <section class="sheet-main">
+        <div class="profile-column">
+          <div class="profile-card">
+            <div class="portrait"><span>◉</span></div>
+            <div class="identity-grid">
+              <label>PERSONAGEM<input id="personagem"></label>
+              <label>JOGADOR<input id="jogadorVisual" disabled></label>
+              <label>ORIGEM<input id="origem"></label>
+              <label>CLASSE<input id="classe"></label>
+              <label>TRILHA<input id="trilha"></label>
+              <label>NEX %<input id="nex" type="number" min="0" max="99"></label>
+            </div>
+          </div>
 
-      <div class="tab" id="tab-combate">
-        <div class="section-actions"><h3>ATAQUES</h3><button id="addAtaque">+ Ataque</button></div>
-        <div id="listaAtaques"></div>
-      </div>
+          <div class="attribute-sigil" aria-label="Atributos">
+            <div class="sigil-core">ATRIBUTOS</div>
+            <label class="attr-orb attr-agi"><input id="agi" type="number"><span>AGILIDADE<br><b>AGI</b></span></label>
+            <label class="attr-orb attr-for"><input id="for" type="number"><span>FORÇA<br><b>FOR</b></span></label>
+            <label class="attr-orb attr-int"><input id="int" type="number"><span>INTELECTO<br><b>INT</b></span></label>
+            <label class="attr-orb attr-pre"><input id="pre" type="number"><span>PRESENÇA<br><b>PRE</b></span></label>
+            <label class="attr-orb attr-vig"><input id="vig" type="number"><span>VIGOR<br><b>VIG</b></span></label>
+          </div>
 
-      <div class="tab" id="tab-habilidades">
-        <div class="notice">Ao ativar uma habilidade, o custo de PE é descontado automaticamente. Habilidades do tipo <b>Próximo ataque</b> são desmarcadas após a rolagem do ataque.</div>
-        <div class="section-actions"><h3>HABILIDADES</h3><button id="addHabilidade">+ Habilidade</button></div>
-        <div id="listaHabilidades"></div>
-      </div>
+          <div class="quick-stats">
+            <div><span>NEX</span><b id="nexBadge">5%</b></div>
+            <div><span>PE / TURNO</span><b id="peTurno">1</b></div>
+            <div><span>DESLOCAMENTO</span><b>9 m / 6 q</b></div>
+          </div>
 
-      <div class="tab" id="tab-inventario">
-        <div class="section-actions"><h3>INVENTÁRIO</h3><button id="addItem">+ Item</button></div>
-        <div id="listaInventario"></div>
-      </div>
+          <div class="resource-group">
+            <div class="resource-label">VIDA</div>
+            <div class="resource-bar vida" id="barPv"><span>♥</span><input id="pv" type="number"><b>/</b><input id="pvMax" type="number"></div>
+            <div class="resource-label">SANIDADE</div>
+            <div class="resource-bar sanidade" id="barSan"><span>◉</span><input id="san" type="number"><b>/</b><input id="sanMax" type="number"></div>
+            <div class="resource-label">ESFORÇO</div>
+            <div class="resource-bar esforco" id="barPe"><span>ϟ</span><input id="pe" type="number"><b>/</b><input id="peMax" type="number"></div>
+          </div>
 
-      <div class="tab" id="tab-rituais">
-        <div class="section-actions"><h3>RITUAIS</h3><button id="addRitual">+ Ritual</button></div>
-        <div id="listaRituais"></div>
-      </div>
+          <div class="defense-card">
+            <div class="shield"><input id="defesa" type="number"><span>DEFESA</span></div>
+            <div><small>BLOQUEIO</small><b>0</b></div>
+            <div><small>ESQUIVA</small><b id="esquivaVisual">10</b></div>
+          </div>
+          <div class="sync">✓ Sincronizada em tempo real</div>
+        </div>
 
-      <div class="tab" id="tab-anotacoes">
-        <textarea id="anotacoes" rows="14" placeholder="Anotações da ficha..."></textarea>
-      </div>
+        <div class="details-column">
+          <nav class="tabs">
+            <button data-tab="pericias" class="active">PERÍCIAS</button>
+            <button data-tab="combate">COMBATE</button>
+            <button data-tab="habilidades">HABILIDADES</button>
+            <button data-tab="rituais">RITUAIS</button>
+            <button data-tab="inventario">INVENTÁRIO</button>
+            <button data-tab="anotacoes">DESCRIÇÃO</button>
+          </nav>
+
+          <div class="tab active" id="tab-pericias">
+            <div class="section-actions"><div><small>PERÍCIAS DA FICHA</small><h3>PERÍCIAS</h3></div><button id="addPericia">+ Nova perícia</button></div>
+            <div class="table-head pericia-head"><span>PERÍCIA</span><span>BÔNUS</span><span>ROLAR</span><span></span></div>
+            <div id="listaPericias" class="dense-list"></div>
+          </div>
+
+          <div class="tab" id="tab-combate">
+            <div class="section-actions"><div><small>ARMAS E GOLPES</small><h3>COMBATE</h3></div><button id="addAtaque">+ Novo ataque</button></div>
+            <div class="dice-box"><span>ROLAGEM COMPARTILHADA</span><b id="rolagemLog">—</b></div>
+            <div id="listaAtaques" class="cards-list"></div>
+          </div>
+
+          <div class="tab" id="tab-habilidades">
+            <div class="ability-help"><b>AUTOMAÇÃO DE PE ATIVA</b><span>Ativar uma habilidade desconta PE automaticamente. Habilidades de “Próximo ataque” desligam sozinhas depois do ataque.</span></div>
+            <div class="section-actions"><div><small>PODERES E HABILIDADES</small><h3>HABILIDADES</h3></div><button id="addHabilidade">+ Nova habilidade</button></div>
+            <div id="listaHabilidades" class="cards-list"></div>
+          </div>
+
+          <div class="tab" id="tab-rituais">
+            <div class="section-actions"><div><small>CONJURAÇÃO</small><h3>RITUAIS</h3></div><button id="addRitual">+ Novo ritual</button></div>
+            <div id="listaRituais" class="cards-list"></div>
+          </div>
+
+          <div class="tab" id="tab-inventario">
+            <div class="section-actions"><div><small>EQUIPAMENTOS</small><h3>INVENTÁRIO</h3></div><button id="addItem">+ Novo item</button></div>
+            <div id="listaInventario" class="cards-list"></div>
+          </div>
+
+          <div class="tab" id="tab-anotacoes">
+            <div class="section-actions"><div><small>HISTÓRIA E ANOTAÇÕES</small><h3>DESCRIÇÃO</h3></div></div>
+            <textarea id="anotacoes" rows="22" placeholder="Descrição, aparência, personalidade, anotações da campanha..."></textarea>
+          </div>
+        </div>
+      </section>
     </section>
 
-    <section class="map-panel">
-      <div class="map-toolbar">
-        <strong>MAPA</strong>
-        <button id="zoomMenos">−</button><button id="zoomMais">+</button><button id="zoomReset">100%</button>
-      </div>
-      <div id="masterMapControls" class="master-card hidden">
+    <section id="mapScreen" class="screen map-screen hidden">
+      <div class="map-toolbar"><strong>MAPA DA CAMPANHA</strong><button id="zoomMenos">−</button><button id="zoomMais">+</button><button id="zoomReset">100%</button></div>
+      <div id="masterMapControls" class="master-card map-controls hidden">
         <input id="mapUrl" placeholder="URL da imagem do mapa" />
         <input id="mapW" type="number" value="1600" placeholder="Largura" />
         <input id="mapH" type="number" value="900" placeholder="Altura" />
@@ -116,13 +146,8 @@
         <input id="tokenTamanho" type="number" value="72" />
         <button id="btnCriarToken">+ Token</button>
       </div>
-      <div id="mapViewport" class="map-viewport">
-        <div id="mapStage" class="map-stage"></div>
-      </div>
-      <div class="bottom-log">
-        <div><b>Jogadores:</b> <span id="jogadoresLista">—</span></div>
-        <div><b>Rolagem:</b> <span id="rolagemLog">—</span></div>
-      </div>
+      <div id="mapViewport" class="map-viewport"><div id="mapStage" class="map-stage"></div></div>
+      <div class="bottom-log"><div><b>Sala:</b> <span id="salaVisual">—</span></div><div><b>Última rolagem:</b> <span id="rolagemLogMapa">—</span></div></div>
     </section>
   </main>
 
