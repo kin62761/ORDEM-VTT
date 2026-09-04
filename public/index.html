@@ -159,7 +159,18 @@
         <input id="tokenDono" placeholder="Dono (nome exato)" />
         <input id="tokenImagem" placeholder="Imagem/GIF ou link público do Google Drive" />
         <input id="tokenTamanho" type="number" value="72" />
+        <label class="check-label token-hidden-check"><input id="tokenOculto" type="checkbox"> Criar token oculto para jogadores</label>
         <button id="btnCriarToken">+ Token</button>
+        <div class="visibility-control-block">
+          <h4>🌫 VISIBILIDADE DO MAPA</h4>
+          <p>Escolha um efeito e arraste sobre o mapa. O Mestre vê a área marcada mais transparente; os jogadores veem o efeito completo.</p>
+          <label class="volume-label">Intensidade <input id="maskOpacity" type="range" min="0.15" max="1" step="0.05" value="0.90"></label>
+          <button id="btnFogMode">🌫 DESENHAR NEBLINA</button>
+          <button id="btnDimMode">🌑 ESCURECER ÁREA</button>
+          <button id="btnCancelarMask">✕ CANCELAR DESENHO</button>
+          <button id="btnLimparMascaras" class="danger-btn">LIMPAR TODAS</button>
+          <small>💡 No Mestre: dê dois cliques em uma área marcada para removê-la.</small>
+        </div>
         <div class="media-control-block">
           <h4>🎵 TRILHA SONORA DA CENA</h4>
           <input id="trilhaUrl" placeholder="MP3/OGG/WAV ou link público do Google Drive" />
