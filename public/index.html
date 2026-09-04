@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ORDEM VTT • Ficha Automática</title>
+  <title>ORDEM VTT • Cenas, Trilha & Cinemáticas</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">▼</span><div><strong>ORDEM <em>VTT</em></strong><small>MESA VIRTUAL • SELO DAS ARMAS</small></div></div>
     <nav class="main-nav hidden" id="mainNav">
-      <button id="navMapa">◫ <span>MAPA</span></button>
+      <button id="navMapa">◫ <span>CENAS</span></button>
       <button id="navFicha" class="active">♙ <span>FICHA</span></button>
     </nav>
     <div class="login" id="loginBox">
@@ -134,23 +134,67 @@
     </section>
 
     <section id="mapScreen" class="screen map-screen hidden">
-      <div class="map-toolbar"><strong>MAPA DA CAMPANHA</strong><button id="zoomMenos">−</button><button id="zoomMais">+</button><button id="zoomReset">100%</button></div>
+      <div class="map-toolbar">
+        <strong>CENAS DA CAMPANHA</strong>
+        <select id="cenaSelect" class="scene-select"></select>
+        <span id="cenaNomeAtual" class="scene-current">Cena 1</span>
+        <button id="zoomMenos">−</button><button id="zoomMais">+</button><button id="zoomReset">100%</button>
+        <button id="btnAtivarAudio" class="audio-unlock">🔊 ATIVAR ÁUDIO</button>
+      </div>
+      <div id="masterSceneControls" class="master-card scene-controls hidden">
+        <div class="scene-grid">
+          <input id="novaCenaNome" placeholder="Nome da nova cena (Ex.: Hospital abandonado)" />
+          <button id="btnCriarCena">+ CRIAR CENA</button>
+          <input id="renomearCenaNome" placeholder="Renomear cena atual" />
+          <button id="btnRenomearCena">RENOMEAR</button>
+          <button id="btnRemoverCena" class="danger-btn">EXCLUIR CENA</button>
+        </div>
+      </div>
       <div id="masterMapControls" class="master-card map-controls hidden">
-        <input id="mapUrl" placeholder="URL da imagem do mapa" />
+        <input id="mapUrl" placeholder="Cole URL da imagem ou link público do Google Drive" />
         <input id="mapW" type="number" value="1600" placeholder="Largura" />
         <input id="mapH" type="number" value="900" placeholder="Altura" />
-        <button id="btnSalvarMapa">Salvar mapa</button>
+        <button id="btnSalvarMapa">Salvar mapa</button><small class="drive-hint">☁ Google Drive público é convertido automaticamente</small>
         <input id="tokenNome" placeholder="Nome do token" />
         <input id="tokenDono" placeholder="Dono (nome exato)" />
-        <input id="tokenImagem" placeholder="URL imagem/GIF" />
+        <input id="tokenImagem" placeholder="Imagem/GIF ou link público do Google Drive" />
         <input id="tokenTamanho" type="number" value="72" />
         <button id="btnCriarToken">+ Token</button>
+        <div class="media-control-block">
+          <h4>🎵 TRILHA SONORA DA CENA</h4>
+          <input id="trilhaUrl" placeholder="MP3/OGG/WAV ou link público do Google Drive" />
+          <label class="volume-label">Volume <input id="trilhaVolume" type="range" min="0" max="1" step="0.05" value="0.55"></label>
+          <label class="check-label"><input id="trilhaLoop" type="checkbox" checked> Repetir em loop</label>
+          <button id="btnSalvarTrilha">Salvar trilha</button>
+          <button id="btnPlayTrilha">▶ Tocar para todos</button>
+          <button id="btnPauseTrilha">⏸ Pausar</button>
+          <button id="btnStopTrilha">■ Parar</button>
+        </div>
+        <div class="media-control-block cinematic-control-block">
+          <h4>🎬 CINEMÁTICA PARA TODOS</h4>
+          <input id="cineTitulo" placeholder="Título (Ex.: A porta se abre...)" />
+          <select id="cineTipo"><option value="video">Vídeo</option><option value="imagem">Imagem</option></select>
+          <input id="cineUrl" placeholder="MP4/WebM, imagem ou link público do Google Drive" />
+          <input id="cineDuracao" type="number" min="0" value="0" placeholder="Duração da imagem em segundos (0 = manual)" />
+          <button id="btnIniciarCine">▶ PASSAR PARA TODOS</button>
+          <button id="btnPararCine" class="danger-btn">■ ENCERRAR</button>
+        </div>
       </div>
       <div id="mapViewport" class="map-viewport"><div id="mapStage" class="map-stage"></div></div>
       <div class="bottom-log"><div><b>Sala:</b> <span id="salaVisual">—</span></div><div><b>Última rolagem:</b> <span id="rolagemLogMapa">—</span></div></div>
     </section>
   </main>
 
+
+  <audio id="audioTrilha" preload="auto"></audio>
+  <div id="cinematicOverlay" class="cinematic-overlay hidden">
+    <div class="cinematic-vignette"></div>
+    <div class="cinematic-title" id="cinematicTitle">CINEMÁTICA</div>
+    <video id="cinematicVideo" class="cinematic-media hidden" playsinline></video>
+    <img id="cinematicImage" class="cinematic-media hidden" alt="Cinemática">
+    <div id="cinematicAudioWarning" class="cinematic-warning hidden">🔇 Clique em “Ativar áudio” antes da sessão para garantir som.</div>
+    <button id="cinematicCloseMaster" class="cinematic-close hidden">ENCERRAR CINEMÁTICA</button>
+  </div>
   <div id="toast" class="toast hidden"></div>
   <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>
