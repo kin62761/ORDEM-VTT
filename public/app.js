@@ -14,6 +14,29 @@ function toast(msg, tipo='ok'){
 }
 function n(v,d=0){ const x=Number(v); return Number.isFinite(x)?x:d; }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function pct(atual,max){ max=n(max); atual=n(atual); return max>0?Math.max(0,Math.min(100,(atual/max)*100)):0; }
+function atualizarVisualFicha(){
+  if(!ficha)return;
+  const nome=(ficha.personagem||fichaAtualNome||'PERSONAGEM');
+  if($('sidebarNome')) $('sidebarNome').textContent=nome.toUpperCase();
+  if($('sidebarInfo')) $('sidebarInfo').textContent=`NEX ${n(ficha.nex,5)}% • ${ficha.classe||'—'}`;
+  if($('jogadorVisual')) $('jogadorVisual').value=ficha.jogador||fichaAtualNome||'';
+  if($('nexBadge')) $('nexBadge').textContent=`${n(ficha.nex,5)}%`;
+  if($('peTurno')) $('peTurno').textContent=Math.max(1,Math.ceil(n(ficha.nex,5)/5));
+  if($('esquivaVisual')) $('esquivaVisual').textContent=10+n(ficha.atributos?.agi,0);
+  if($('barPv')) $('barPv').style.setProperty('--pct',pct(ficha.pv,ficha.pvMax)+'%');
+  if($('barSan')) $('barSan').style.setProperty('--pct',pct(ficha.san,ficha.sanMax)+'%');
+  if($('barPe')) $('barPe').style.setProperty('--pct',pct(ficha.pe,ficha.peMax)+'%');
+  if($('salaVisual')) $('salaVisual').textContent=sessao.sala||'—';
+}
+function abrirTela(nome){
+  const fichaTela=$('sheetScreen'), mapaTela=$('mapScreen');
+  const ehMapa=nome==='mapa';
+  fichaTela.classList.toggle('hidden',ehMapa); mapaTela.classList.toggle('hidden',!ehMapa);
+  $('navMapa')?.classList.toggle('active',ehMapa); $('navFicha')?.classList.toggle('active',!ehMapa);
+}
+$('navFicha')?.addEventListener('click',()=>abrirTela('ficha'));
+$('navMapa')?.addEventListener('click',()=>abrirTela('mapa'));
 
 $('btnEntrar').onclick=()=>{
   const nome=$('nomeEntrada').value.trim();
@@ -24,9 +47,9 @@ $('btnEntrar').onclick=()=>{
 
 socket.on('estadoInicial',estado=>{
   fichas=estado.fichas||{}; mapa=estado.mapa||mapa; tokens=estado.tokens||[];
-  $('loginBox').classList.add('hidden'); $('statusOnline').classList.remove('hidden'); $('app').classList.remove('hidden');
+  $('loginBox').classList.add('hidden'); $('statusOnline').classList.remove('hidden'); $('app').classList.remove('hidden'); $('mainNav')?.classList.remove('hidden');
   const mestre=sessao.perfil==='mestre';
-  $('seletorFichaMestre').classList.toggle('hidden',!mestre); $('masterMapControls').classList.toggle('hidden',!mestre);
+  $('seletorFichaMestre').classList.toggle('hidden',!mestre); $('masterMapControls').classList.toggle('hidden',!mestre); $('btnNovoFichaVisual')?.classList.toggle('hidden',!mestre);
   if(mestre){ atualizarSelectMestre(); fichaAtualNome=Object.keys(fichas)[0]||''; if(fichaAtualNome) carregarFicha(fichaAtualNome); }
   else { fichaAtualNome=sessao.nome; carregarFicha(fichaAtualNome); }
   aplicarMapa(); renderTokens(); atualizarJogadores(estado.jogadores||[]);
@@ -39,7 +62,7 @@ socket.on('fichaAtualizada',({nome,ficha:nova})=>{
 socket.on('mapaAtualizado',m=>{ mapa=m; aplicarMapa(); });
 socket.on('tokensAtualizados',t=>{ tokens=t||[]; renderTokens(); });
 socket.on('jogadoresAtualizados',atualizarJogadores);
-socket.on('rolagemCompartilhada',r=>{ $('rolagemLog').textContent=`${r.jogador}: ${r.contexto||'Rolagem'} → ${r.expressao}`; });
+socket.on('rolagemCompartilhada',r=>{ const txt=`${r.jogador}: ${r.contexto||'Rolagem'} → ${r.expressao}`; if($('rolagemLog')) $('rolagemLog').textContent=txt; if($('rolagemLogMapa')) $('rolagemLogMapa').textContent=txt; });
 
 function atualizarJogadores(lista){ $('jogadoresLista').textContent=(lista||[]).map(j=>`${j.nome}${j.perfil==='mestre'?' (Mestre)':''}`).join(', ')||'—'; }
 function fichaPadraoLocal(nome){return {jogador:nome,personagem:nome,origem:'',classe:'',trilha:'',nex:5,defesa:10,pv:20,pvMax:20,pe:10,peMax:10,san:20,sanMax:20,atributos:{agi:1,for:1,int:1,pre:1,vig:1},pericias:[],ataques:[],habilidades:[],inventario:[],rituais:[],anotacoes:''};}
@@ -52,11 +75,12 @@ $('btnCriarFicha').onclick=()=>{ const nome=$('novaFichaNome').value.trim(); if(
 
 function preencherFicha(){
   if(!ficha)return;
-  $('tituloFicha').textContent=(ficha.personagem||fichaAtualNome||'PERSONAGEM').toUpperCase();
+  if($('tituloFicha')) if($('tituloFicha')) $('tituloFicha').textContent=(ficha.personagem||fichaAtualNome||'PERSONAGEM').toUpperCase();
+  atualizarVisualFicha();
   for(const id of ['personagem','origem','classe','trilha','nex','defesa','pv','pvMax','pe','peMax','san','sanMax']) $(id).value=ficha[id]??'';
   for(const id of ['agi','for','int','pre','vig']) $(id).value=ficha.atributos?.[id]??0;
   $('anotacoes').value=ficha.anotacoes||'';
-  renderPericias(); renderAtaques(); renderHabilidades(); renderInventario(); renderRituais();
+  renderPericias(); renderAtaques(); renderHabilidades(); renderInventario(); renderRituais(); atualizarVisualFicha();
 }
 
 function lerCamposBase(){
@@ -65,7 +89,8 @@ function lerCamposBase(){
   for(const id of ['nex','defesa','pv','pvMax','pe','peMax','san','sanMax']) ficha[id]=n($(id).value);
   ficha.atributos={}; for(const id of ['agi','for','int','pre','vig']) ficha.atributos[id]=n($(id).value);
   ficha.anotacoes=$('anotacoes').value;
-  $('tituloFicha').textContent=(ficha.personagem||fichaAtualNome||'PERSONAGEM').toUpperCase();
+  if($('tituloFicha')) if($('tituloFicha')) $('tituloFicha').textContent=(ficha.personagem||fichaAtualNome||'PERSONAGEM').toUpperCase();
+  atualizarVisualFicha();
 }
 function agendarSalvar(){ clearTimeout(saveTimer); saveTimer=setTimeout(salvarFicha,220); }
 function salvarFicha(){ if(!ficha||!fichaAtualNome)return; lerCamposBase(); socket.emit('atualizarFicha',{nome:fichaAtualNome,ficha}); }
@@ -129,7 +154,7 @@ function alternarHabilidade(id,ativar){
   if(ativar){
     const custo=Math.max(0,n(h.custoPE));
     if(n(ficha.pe)<custo){ toast(`PE insuficiente. Necessário ${custo}, disponível ${n(ficha.pe)}.`,'error'); h.ativa=false; renderHabilidades(); return; }
-    ficha.pe=Math.max(0,n(ficha.pe)-custo); $('pe').value=ficha.pe;
+    ficha.pe=Math.max(0,n(ficha.pe)-custo); $('pe').value=ficha.pe; atualizarVisualFicha();
     if(h.tipo==='instantanea'||h.tipo==='reacao'){ h.ativa=false; toast(`${h.nome}: -${custo} PE`); }
     else { h.ativa=true; toast(`${h.nome} ativada: -${custo} PE`); }
   } else h.ativa=false;
@@ -146,7 +171,7 @@ function executarAtaque(id){
   renderHabilidades(); salvarFicha();
 }
 function aplicarBonus(expr,bonus){ const e=String(expr||'').trim()||'1d20'; if(!bonus)return e; return `${e}${bonus>=0?'+':''}${bonus}`; }
-function conjurarRitual(id){ const r=ficha.rituais.find(x=>x.id===id); if(!r)return; const custo=Math.max(0,n(r.custoPE)); if(n(ficha.pe)<custo)return toast(`PE insuficiente para ${r.nome}.`,'error'); ficha.pe-=custo; $('pe').value=ficha.pe; socket.emit('rolarDado',{expressao:`-${custo} PE`,contexto:`Ritual: ${r.nome}`}); toast(`${r.nome}: -${custo} PE`); salvarFicha(); }
+function conjurarRitual(id){ const r=ficha.rituais.find(x=>x.id===id); if(!r)return; const custo=Math.max(0,n(r.custoPE)); if(n(ficha.pe)<custo)return toast(`PE insuficiente para ${r.nome}.`,'error'); ficha.pe-=custo; $('pe').value=ficha.pe; atualizarVisualFicha(); socket.emit('rolarDado',{expressao:`-${custo} PE`,contexto:`Ritual: ${r.nome}`}); toast(`${r.nome}: -${custo} PE`); salvarFicha(); }
 
 $('btnSalvarMapa').onclick=()=>socket.emit('salvarMapa',{url:$('mapUrl').value,largura:n($('mapW').value,1600),altura:n($('mapH').value,900)});
 $('btnCriarToken').onclick=()=>socket.emit('criarToken',{nome:$('tokenNome').value,dono:$('tokenDono').value,imagem:$('tokenImagem').value,tamanho:n($('tokenTamanho').value,72)});
@@ -163,3 +188,5 @@ function ativarDrag(el,t){
   el.onpointerup=e=>{ if(!start)return; const nx=start.x+(e.clientX-start.mx)/zoom, ny=start.y+(e.clientY-start.my)/zoom; socket.emit('moverToken',{id:t.id,x:nx,y:ny}); start=null; };
   if(sessao.perfil==='mestre') el.ondblclick=()=>{ if(confirm(`Remover ${t.nome}?`))socket.emit('removerToken',t.id); };
 }
+
+$('btnNovoFichaVisual')?.addEventListener('click',()=>{ $('novaFichaNome')?.focus(); });
