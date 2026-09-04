@@ -5,9 +5,14 @@ let fichas = {};
 let fichaAtualNome = '';
 let ficha = null;
 let saveTimer = null;
+let cenas = [];
+let cenaAtualId = '';
 let mapa = { url:'', largura:1600, altura:900 };
 let tokens = [];
 let zoom = 1;
+let audioDesbloqueado = false;
+let audioState = { url:'', playing:false, offset:0, startedAt:0, volume:.55, loop:true, cenaId:'' };
+let cinematicTimer = null;
 
 function toast(msg, tipo='ok'){
   const el=$('toast'); el.textContent=msg; el.className=`toast ${tipo}`; setTimeout(()=>el.className='toast hidden',2400);
@@ -15,6 +20,53 @@ function toast(msg, tipo='ok'){
 function n(v,d=0){ const x=Number(v); return Number.isFinite(x)?x:d; }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function pct(atual,max){ max=n(max); atual=n(atual); return max>0?Math.max(0,Math.min(100,(atual/max)*100)):0; }
+
+// Converte links públicos do Google Drive em URL direta de imagem.
+// Aceita, por exemplo:
+// https://drive.google.com/file/d/ID/view?usp=sharing
+// https://drive.google.com/open?id=ID
+// https://drive.google.com/uc?id=ID
+function converterLinkImagem(url){
+  const original=String(url||'').trim();
+  if(!original) return '';
+  try{
+    const u=new URL(original);
+    const host=u.hostname.toLowerCase();
+    if(!host.includes('drive.google.com') && !host.includes('docs.google.com')) return original;
+    let id='';
+    const m=u.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || u.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if(m) id=m[1];
+    if(!id) id=u.searchParams.get('id')||'';
+    if(!id){
+      const parts=u.pathname.split('/').filter(Boolean);
+      const idx=parts.indexOf('folders');
+      if(idx>=0 && parts[idx+1]) id=parts[idx+1];
+    }
+    // Pastas não são imagens; se não houver ID de arquivo válido, mantém o link.
+    if(!id) return original;
+    return `https://lh3.googleusercontent.com/d/${id}`;
+  }catch(e){
+    return original;
+  }
+}
+window.converterLinkImagem=converterLinkImagem;
+
+function extrairDriveId(url){
+  const original=String(url||'').trim(); if(!original) return '';
+  try{
+    const u=new URL(original); const host=u.hostname.toLowerCase();
+    if(!host.includes('drive.google.com') && !host.includes('docs.google.com')) return '';
+    const m=u.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || u.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if(m) return m[1]; return u.searchParams.get('id')||'';
+  }catch(_){ return ''; }
+}
+function converterLinkMidia(url){
+  const original=String(url||'').trim(); if(!original) return '';
+  const id=extrairDriveId(original); return id?`https://drive.google.com/uc?export=download&id=${id}`:original;
+}
+window.converterLinkMidia=converterLinkMidia;
+
+
 function atualizarVisualFicha(){
   if(!ficha)return;
   const nome=(ficha.personagem||fichaAtualNome||'PERSONAGEM');
@@ -46,21 +98,32 @@ $('btnEntrar').onclick=()=>{
 };
 
 socket.on('estadoInicial',estado=>{
-  fichas=estado.fichas||{}; mapa=estado.mapa||mapa; tokens=estado.tokens||[];
+  fichas=estado.fichas||{}; cenas=estado.cenas||[]; cenaAtualId=estado.cenaAtualId||'';
+  mapa=estado.mapa||mapa; tokens=estado.tokens||[]; audioState=estado.audioState||audioState;
   $('loginBox').classList.add('hidden'); $('statusOnline').classList.remove('hidden'); $('app').classList.remove('hidden'); $('mainNav')?.classList.remove('hidden');
   const mestre=sessao.perfil==='mestre';
-  $('seletorFichaMestre').classList.toggle('hidden',!mestre); $('masterMapControls').classList.toggle('hidden',!mestre); $('btnNovoFichaVisual')?.classList.toggle('hidden',!mestre);
+  $('seletorFichaMestre').classList.toggle('hidden',!mestre); $('masterMapControls').classList.toggle('hidden',!mestre); $('masterSceneControls')?.classList.toggle('hidden',!mestre); $('btnNovoFichaVisual')?.classList.toggle('hidden',!mestre);
+  $('cinematicCloseMaster')?.classList.toggle('hidden',!mestre);
   if(mestre){ atualizarSelectMestre(); fichaAtualNome=Object.keys(fichas)[0]||''; if(fichaAtualNome) carregarFicha(fichaAtualNome); }
   else { fichaAtualNome=sessao.nome; carregarFicha(fichaAtualNome); }
-  aplicarMapa(); renderTokens(); atualizarJogadores(estado.jogadores||[]);
+  atualizarCenasUI(); aplicarMapa(); renderTokens(); atualizarJogadores(estado.jogadores||[]); aplicarTrilhaCenaNosControles();
+  if(estado.cinematica) mostrarCinematica(estado.cinematica);
+  if(audioState?.playing) aplicarAudioComando({acao:'play',...audioState,serverNow:estado.serverNow||Date.now()});
 });
 
 socket.on('fichaAtualizada',({nome,ficha:nova})=>{
   fichas[nome]=nova; if(nome===fichaAtualNome){ ficha=nova; preencherFicha(); }
   if(sessao.perfil==='mestre') atualizarSelectMestre();
 });
+socket.on('cenaAtualizada',estado=>{
+  cenas=estado.cenas||cenas; cenaAtualId=estado.cenaAtualId||cenaAtualId; mapa=estado.mapa||mapa; tokens=estado.tokens||[];
+  atualizarCenasUI(); aplicarMapa(); renderTokens(); aplicarTrilhaCenaNosControles(estado.trilha);
+});
 socket.on('mapaAtualizado',m=>{ mapa=m; aplicarMapa(); });
 socket.on('tokensAtualizados',t=>{ tokens=t||[]; renderTokens(); });
+socket.on('audioComando',aplicarAudioComando);
+socket.on('cinematicaIniciada',mostrarCinematica);
+socket.on('cinematicaEncerrada',esconderCinematica);
 socket.on('jogadoresAtualizados',atualizarJogadores);
 socket.on('rolagemCompartilhada',r=>{ const txt=`${r.jogador}: ${r.contexto||'Rolagem'} → ${r.expressao}`; if($('rolagemLog')) $('rolagemLog').textContent=txt; if($('rolagemLogMapa')) $('rolagemLogMapa').textContent=txt; });
 
@@ -173,20 +236,106 @@ function executarAtaque(id){
 function aplicarBonus(expr,bonus){ const e=String(expr||'').trim()||'1d20'; if(!bonus)return e; return `${e}${bonus>=0?'+':''}${bonus}`; }
 function conjurarRitual(id){ const r=ficha.rituais.find(x=>x.id===id); if(!r)return; const custo=Math.max(0,n(r.custoPE)); if(n(ficha.pe)<custo)return toast(`PE insuficiente para ${r.nome}.`,'error'); ficha.pe-=custo; $('pe').value=ficha.pe; atualizarVisualFicha(); socket.emit('rolarDado',{expressao:`-${custo} PE`,contexto:`Ritual: ${r.nome}`}); toast(`${r.nome}: -${custo} PE`); salvarFicha(); }
 
-$('btnSalvarMapa').onclick=()=>socket.emit('salvarMapa',{url:$('mapUrl').value,largura:n($('mapW').value,1600),altura:n($('mapH').value,900)});
-$('btnCriarToken').onclick=()=>socket.emit('criarToken',{nome:$('tokenNome').value,dono:$('tokenDono').value,imagem:$('tokenImagem').value,tamanho:n($('tokenTamanho').value,72)});
+// ===== CENAS =====
+function cenaAtual(){ return cenas.find(c=>c.id===cenaAtualId)||null; }
+function atualizarCenasUI(){
+  const sel=$('cenaSelect'); if(!sel)return;
+  sel.innerHTML=(cenas||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('');
+  sel.value=cenaAtualId;
+  const c=cenaAtual(); $('cenaNomeAtual').textContent=c?.nome||'Cena';
+  if($('renomearCenaNome')) $('renomearCenaNome').value=c?.nome||'';
+}
+$('cenaSelect')?.addEventListener('change',e=>{
+  if(sessao.perfil!=='mestre'){ e.target.value=cenaAtualId; return toast('Somente o Mestre troca a cena para todos.','error'); }
+  socket.emit('trocarCena',{id:e.target.value});
+});
+$('btnCriarCena')?.addEventListener('click',()=>{
+  const nome=$('novaCenaNome').value.trim()||`Cena ${cenas.length+1}`;
+  socket.emit('criarCena',{nome}); $('novaCenaNome').value='';
+});
+$('btnRenomearCena')?.addEventListener('click',()=>{ const nome=$('renomearCenaNome').value.trim(); if(nome) socket.emit('renomearCena',{id:cenaAtualId,nome}); });
+$('btnRemoverCena')?.addEventListener('click',()=>{ if(cenas.length<=1)return toast('É preciso manter pelo menos uma cena.','error'); if(confirm('Excluir esta cena e os tokens dela?'))socket.emit('removerCena',{id:cenaAtualId}); });
+
+$('btnSalvarMapa').onclick=()=>{ const original=$('mapUrl').value.trim(); const url=converterLinkImagem(original); $('mapUrl').value=url; socket.emit('salvarMapa',{url,largura:n($('mapW').value,1600),altura:n($('mapH').value,900)}); toast(original!==url?'Mapa salvo. Link do Google Drive convertido automaticamente.':'Mapa salvo nesta cena.'); };
+$('btnCriarToken').onclick=()=>{ const original=$('tokenImagem').value.trim(); const imagem=converterLinkImagem(original); $('tokenImagem').value=imagem; socket.emit('criarToken',{nome:$('tokenNome').value,dono:$('tokenDono').value,imagem,tamanho:n($('tokenTamanho').value,72)}); toast(original && original!==imagem?'Token criado. Link do Google Drive convertido automaticamente.':'Token criado nesta cena.'); };
 $('zoomMais').onclick=()=>{zoom=Math.min(2.5,zoom+.1);aplicarZoom();}; $('zoomMenos').onclick=()=>{zoom=Math.max(.35,zoom-.1);aplicarZoom();}; $('zoomReset').onclick=()=>{zoom=1;aplicarZoom();};
-function aplicarMapa(){ const s=$('mapStage'); s.style.width=`${mapa.largura}px`; s.style.height=`${mapa.altura}px`; s.style.backgroundImage=mapa.url?`url("${mapa.url.replace(/"/g,'%22')}")`:'none'; $('mapUrl').value=mapa.url||''; $('mapW').value=mapa.largura||1600; $('mapH').value=mapa.altura||900; aplicarZoom(); }
+function aplicarMapa(){ const s=$('mapStage'); s.style.width=`${mapa.largura}px`; s.style.height=`${mapa.altura}px`; const mapImg=converterLinkImagem(mapa.url); s.style.backgroundImage=mapImg?`url("${mapImg.replace(/"/g,'%22')}")`:'none'; $('mapUrl').value=mapa.url||''; $('mapW').value=mapa.largura||1600; $('mapH').value=mapa.altura||900; aplicarZoom(); }
 function aplicarZoom(){ $('mapStage').style.transform=`scale(${zoom})`; $('zoomReset').textContent=`${Math.round(zoom*100)}%`; }
 function renderTokens(){
   const s=$('mapStage'); s.querySelectorAll('.token').forEach(e=>e.remove());
-  tokens.forEach(t=>{ const el=document.createElement('div'); el.className='token'+(t.dono===sessao.nome?' mine':''); el.style.left=t.x+'px'; el.style.top=t.y+'px'; el.style.width=t.tamanho+'px'; el.style.height=t.tamanho+'px'; el.dataset.id=t.id; el.innerHTML=t.imagem?`<img src="${esc(t.imagem)}">`:`<span>${esc(t.nome)}</span>`; s.appendChild(el); ativarDrag(el,t); });
+  tokens.forEach(t=>{ const el=document.createElement('div'); el.className='token'+(t.dono===sessao.nome?' mine':''); el.style.left=t.x+'px'; el.style.top=t.y+'px'; el.style.width=t.tamanho+'px'; el.style.height=t.tamanho+'px'; el.dataset.id=t.id; const tokenImg=converterLinkImagem(t.imagem); el.innerHTML=tokenImg?`<img src="${esc(tokenImg)}" alt="${esc(t.nome)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span style="display:none">${esc(t.nome)}</span>`:`<span>${esc(t.nome)}</span>`; s.appendChild(el); ativarDrag(el,t); });
 }
 function ativarDrag(el,t){
   let start=null; el.onpointerdown=e=>{ const permitido=sessao.perfil==='mestre'||t.dono===sessao.nome; if(!permitido)return; el.setPointerCapture(e.pointerId); start={mx:e.clientX,my:e.clientY,x:t.x,y:t.y}; };
   el.onpointermove=e=>{ if(!start)return; const nx=start.x+(e.clientX-start.mx)/zoom, ny=start.y+(e.clientY-start.my)/zoom; el.style.left=nx+'px'; el.style.top=ny+'px'; };
   el.onpointerup=e=>{ if(!start)return; const nx=start.x+(e.clientX-start.mx)/zoom, ny=start.y+(e.clientY-start.my)/zoom; socket.emit('moverToken',{id:t.id,x:nx,y:ny}); start=null; };
   if(sessao.perfil==='mestre') el.ondblclick=()=>{ if(confirm(`Remover ${t.nome}?`))socket.emit('removerToken',t.id); };
+}
+
+// ===== TRILHA SONORA SINCRONIZADA =====
+function aplicarTrilhaCenaNosControles(trilha){
+  const t=trilha||cenaAtual()?.trilha||{};
+  if($('trilhaUrl')) $('trilhaUrl').value=t.url||'';
+  if($('trilhaVolume')) $('trilhaVolume').value=n(t.volume,.55);
+  if($('trilhaLoop')) $('trilhaLoop').checked=t.loop!==false;
+}
+$('btnAtivarAudio')?.addEventListener('click',async()=>{
+  const a=$('audioTrilha');
+  try{ a.muted=true; a.src=a.src||'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAFAAAACAAACAgICAgICAgICAgICAgICAgICAgICAgI'; await a.play(); a.pause(); a.currentTime=0; a.muted=false; audioDesbloqueado=true; $('btnAtivarAudio').classList.add('ready'); $('btnAtivarAudio').textContent='🔊 ÁUDIO ATIVO'; toast('Áudio liberado neste dispositivo.'); }
+  catch(_){ audioDesbloqueado=true; $('btnAtivarAudio').classList.add('ready'); $('btnAtivarAudio').textContent='🔊 ÁUDIO PRONTO'; toast('Áudio preparado. Se o navegador bloquear, clique novamente quando a trilha começar.'); }
+});
+$('btnSalvarTrilha')?.addEventListener('click',()=>{
+  const url=converterLinkMidia($('trilhaUrl').value.trim()); $('trilhaUrl').value=url;
+  socket.emit('salvarTrilhaCena',{url,volume:n($('trilhaVolume').value,.55),loop:$('trilhaLoop').checked}); toast('Trilha salva nesta cena.');
+});
+$('btnPlayTrilha')?.addEventListener('click',()=>{
+  const url=converterLinkMidia($('trilhaUrl').value.trim()); if(!url)return toast('Informe a URL da trilha.','error');
+  socket.emit('salvarTrilhaCena',{url,volume:n($('trilhaVolume').value,.55),loop:$('trilhaLoop').checked});
+  socket.emit('audioControle',{acao:'play',url,volume:n($('trilhaVolume').value,.55),loop:$('trilhaLoop').checked,offset:0});
+});
+$('btnPauseTrilha')?.addEventListener('click',()=>socket.emit('audioControle',{acao:'pause',offset:$('audioTrilha').currentTime||0}));
+$('btnStopTrilha')?.addEventListener('click',()=>socket.emit('audioControle',{acao:'stop'}));
+$('trilhaVolume')?.addEventListener('input',()=>{ $('audioTrilha').volume=n($('trilhaVolume').value,.55); if(sessao.perfil==='mestre')socket.emit('audioControle',{acao:'volume',volume:n($('trilhaVolume').value,.55)}); });
+function aplicarAudioComando(cmd){
+  audioState={...audioState,...cmd}; const a=$('audioTrilha'); if(!a)return;
+  a.volume=Math.max(0,Math.min(1,n(cmd.volume,.55))); a.loop=cmd.loop!==false;
+  if(cmd.acao==='stop'){ a.pause(); try{a.currentTime=0}catch(_){} return; }
+  if(cmd.acao==='pause'){ a.pause(); if(Number.isFinite(n(cmd.offset,NaN))) try{a.currentTime=Math.max(0,n(cmd.offset))}catch(_){} return; }
+  if(cmd.acao==='volume') return;
+  if(cmd.acao==='play' && cmd.url){
+    const url=converterLinkMidia(cmd.url); if(a.src!==url && !a.src.endsWith(url)){ a.src=url; a.load(); }
+    const elapsed=cmd.startedAt?Math.max(0,((cmd.serverNow||Date.now())-cmd.startedAt)/1000):0;
+    const target=Math.max(0,n(cmd.offset)+elapsed);
+    const start=()=>{ try{ if(Number.isFinite(a.duration)&&a.duration>0&&a.loop) a.currentTime=target%a.duration; else a.currentTime=target; }catch(_){}; a.play().catch(()=>{ toast('🔇 O navegador bloqueou o som. Clique em “ATIVAR ÁUDIO”.','error'); }); };
+    if(a.readyState>=1) start(); else a.onloadedmetadata=()=>{a.onloadedmetadata=null;start();};
+  }
+}
+
+// ===== CINEMÁTICA PARA TODOS =====
+$('btnIniciarCine')?.addEventListener('click',()=>{
+  const tipo=$('cineTipo').value; const original=$('cineUrl').value.trim(); if(!original)return toast('Informe a URL da cinematica.','error');
+  const url=tipo==='imagem'?converterLinkImagem(original):converterLinkMidia(original); $('cineUrl').value=url;
+  socket.emit('iniciarCinematica',{titulo:$('cineTitulo').value.trim()||'CINEMÁTICA',tipo,url,duracao:n($('cineDuracao').value,0)});
+});
+$('btnPararCine')?.addEventListener('click',()=>socket.emit('encerrarCinematica'));
+$('cinematicCloseMaster')?.addEventListener('click',()=>socket.emit('encerrarCinematica'));
+function mostrarCinematica(c){
+  if(!c?.url)return; clearTimeout(cinematicTimer);
+  const ov=$('cinematicOverlay'), video=$('cinematicVideo'), img=$('cinematicImage');
+  $('cinematicTitle').textContent=c.titulo||'CINEMÁTICA'; ov.classList.remove('hidden');
+  video.pause(); video.removeAttribute('src'); video.load(); img.removeAttribute('src'); video.classList.add('hidden'); img.classList.add('hidden');
+  if(c.tipo==='imagem'){
+    img.src=converterLinkImagem(c.url); img.classList.remove('hidden');
+    if(c.duracao>0) cinematicTimer=setTimeout(()=>{ if(sessao.perfil==='mestre')socket.emit('encerrarCinematica'); else esconderCinematica(); },c.duracao*1000);
+  }else{
+    video.src=converterLinkMidia(c.url); video.classList.remove('hidden'); video.controls=false; video.volume=1;
+    const playVideo=()=>video.play().catch(()=>{ $('cinematicAudioWarning').classList.remove('hidden'); video.controls=true; });
+    video.oncanplay=()=>{video.oncanplay=null;playVideo();};
+    video.onended=()=>{ if(sessao.perfil==='mestre')socket.emit('encerrarCinematica'); else esconderCinematica(); };
+  }
+}
+function esconderCinematica(){
+  clearTimeout(cinematicTimer); const video=$('cinematicVideo'); video.pause(); video.removeAttribute('src'); video.load(); $('cinematicImage').removeAttribute('src'); $('cinematicOverlay').classList.add('hidden'); $('cinematicAudioWarning').classList.add('hidden');
 }
 
 $('btnNovoFichaVisual')?.addEventListener('click',()=>{ $('novaFichaNome')?.focus(); });
